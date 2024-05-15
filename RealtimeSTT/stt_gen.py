@@ -23,14 +23,15 @@ if __name__ == '__main__':
         TextToAudioStream(SystemEngine(voice=selected_voice,print_installed_voices=False)).feed("Yes, Master").play(language='en')
 
 
+
     def recording_finished():
         print("Speech end detected... transcribing...")
 
 
     with AudioToTextRecorder(spinner=False, 
                             #  level=logging.DEBUG, 
-                            model="small.en", 
-                            language="en", 
+                            model="small", 
+                            language="ko", 
                             wake_words="jarvis", 
                             on_wakeword_detected=say_hello, 
                             # on_recording_start=say_hello,

@@ -42,15 +42,15 @@ if __name__ == "__main__":
     language = 'en'
 
 
-    # input_txt = '''
-    # 1회 톱타자 박민우를 볼넷으로 내보내더니, 2사 2루에서 데이비슨에게 좌측 담장을 넘어가는 투런 홈런을 허용했다. 
-    # 이후 권희동과 서호철에게 연속 안타를 맞더니 2사 1,2루에서 김성욱에게 3볼-1스트라이크에서 스리런 홈런을 허용했다.
-    # '''
-    # selected_voice = "Heami"
-    # language = 'ko'
+    input_txt = '''
+    본 레포트의 분석 목적은 조선 내업의 정반공정 최적화이다. 내업 정반 공정 최적화는 조선업의 오랜 도전과제였고, 과거에도 다양한 시도가 이루어진 바 있다. 
+    그럼에도 솔루션의 과도한 복잡성 및 생산현장에서 발생하는 다양하고 새로운 변수들을 고려하기 어려움으로 인해 여전히 상당 부분 담당자의 경험적인 능력치에 의존하여 업무가 수행되고 있다
+    '''
+    selected_voice = "Heami"
+    language = 'ko'
 
 
-    # tts_generator(input_txt, selected_voice, language)
+    tts_generator(input_txt, selected_voice, language)
 
     # import logging
     # logging.basicConfig(level=logging.INFO)    
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     # engine.shutdown()
 
-    tts_generator_coqui(input_txt, language)
+    # tts_generator_coqui(input_txt, language)
 
 
 
