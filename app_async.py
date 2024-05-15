@@ -25,7 +25,8 @@ if "messages" not in st.session_state:
 async def fetch(session, url):
     async with session.get(url) as response:
         return await response.json()
-
+    
+@st.experimental_fragment
 async def call_jarvis(llm_name, input_voice):
     urls = {
         "tinydolphin(1.1B)": f"http://127.0.0.1:8000/call_tinydolphin?input_voice={input_voice}",
@@ -61,15 +62,16 @@ if the query does not give you enough information, return a question for additio
 for example, 'could you give me more detailed informations about it?'
 '''
 
-
+@st.experimental_fragment
 async def chat_main():
-    with st.container():
-        llm_name = st.radio("🐬 **Select LLM**", options=["moondream(1B)", "tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=2, key="dsfv")
-        st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
-    
     with st.expander("🐳 **Custom Prompt**"):
         custom_template = st.markdown(sample_template)
 
+    with st.container():
+        llm_name = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsfv")
+        st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
+    
+    
     if st.button("💬 Call Jarvis"):
         async with aiohttp.ClientSession() as session:
             res1 = await fetch(session, "http://127.0.0.1:8000/jarvis_stt")
@@ -105,11 +107,6 @@ async def chat_main():
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
     
 
-
-import os
-from langchain_groq import ChatGroq
-groq_api_key = os.environ['GROQ_API_KEY']
-
 if "retriever" not in st.session_state:
     st.session_state.retirever = ""
 
@@ -123,6 +120,23 @@ if "path" not in st.session_state:
     st.session_state.rag_reversed_messages = ""
 
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+
+@st.experimental_fragment
+def create_vectordb(pdf_text):
+    with st.spinner("Processing..."):
+        if st.button("Create Vectorstore"):
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            splitted_texts = text_splitter.split_text(pdf_text)
+            embed_model = OllamaEmbeddings(model="nomic-embed-text")
+            db=Chroma.from_texts(splitted_texts, embedding=embed_model, persist_directory="test_index")
+        if st.session_state.retirever: 
+            st.session_state.retirever
+            st.info("VectorStore Created")
+
+@st.experimental_fragment
 async def call_rag(llm_name, query):
     urls = {
         "tinydolphin(1.1B)": f"http://127.0.0.1:8000/call_rag_tinydolphin?query={query}",
@@ -146,7 +160,7 @@ async def call_rag(llm_name, query):
     
 async def rag_main():
     with st.container():
-        llm_name = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=0, key="dsssv")
+        llm_name = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsssv")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
     with st.spinner("Processing..."):
@@ -198,14 +212,14 @@ def list_selected_files(path, 확장자):
 
 
 if __name__ == "__main__":
-    st.title("⚓ :blue[AI Jarvis]")
+    st.title("⚓ :blue[HD Jarvis]")
     st.markdown("---")
 
-    tab1, tab2 = st.tabs(["**Chatbot**", "**RAG**"])
+    tab1, tab2 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**"])
     with tab1:
         asyncio.run(chat_main())
     with tab2:
-        with st.expander("📑 File Uploader"):
+        with st.expander("📑 File Uploader anc VectorStore"):
             uploaded_file = st.file_uploader("📎Upload your file")
             if uploaded_file:
                 temp_dir = base_dir   # tempfile.mkdtemp()  --->  import tempfile 필요, 임시저장디렉토리 자동지정함
