@@ -4,6 +4,8 @@ import numpy as np
 import requests
 import json
 from datetime import datetime, timedelta
+import asyncio
+
 
 def calculate_time_delta(start_time, end_time):
     # Calculate the time difference (time delta) in seconds
@@ -183,7 +185,6 @@ def do_rag():
 
 
             st.session_state.rag_messages.append({"role": "user", "content": query})
-            # st.session_state.rag_docs.append(docs)
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output}) 
 
             if st.session_state.rag_output:

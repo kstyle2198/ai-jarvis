@@ -40,14 +40,8 @@ def say_hello():
 def recording_finished():
     print("Speech end detected... transcribing...")
 
-def tts_generator(input_txt, language=language):
-    def dummy_generator(input_txt):
-        yield input_txt
-        print(input_txt)
-    TextToAudioStream(SystemEngine(voice=selected_voice,print_installed_voices=False)).feed(dummy_generator(input_txt)).play(language=language)
 
 def jarvis_stt():
-    
     with AudioToTextRecorder(spinner=False, 
                             model="small",   #'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1', 'large-v2'.
                             language=language, 
@@ -58,12 +52,15 @@ def jarvis_stt():
                             ) as recorder:
         ready_msg = 'Say "Jarvis" then speak.'
         print(ready_msg)
-        print(recorder.text(), end=" \n", flush=True)
-        input_voice = recorder.transcribe()
+        input_voice = recorder.text()
+        print(input_voice)
         return input_voice
-    
-def jarvis_tts(sentence):
-    tts_generator(sentence, language=language)
+
+def jarvis_tts(input_txt, language=language):
+    def dummy_generator(input_txt):
+        yield input_txt
+        print(input_txt)
+    TextToAudioStream(SystemEngine(voice=selected_voice,print_installed_voices=False)).feed(dummy_generator(input_txt)).play(language=language)
 
 def jarvis_tinydophin(input_voice):
     global custom_template
@@ -83,7 +80,7 @@ def jarvis_moondream(input_voice):
     sentence = chain.invoke(query)
     return sentence
 
-def jarvis_dophin_phi(input_voice):
+def jarvis_dolphin_phi(input_voice):
     global custom_template
     llm = ChatOllama(model="dolphin-phi:latest")
     prompt = ChatPromptTemplate.from_template(custom_template)
@@ -127,6 +124,99 @@ def jarvis_rag_tinydolphin(query):
     docs = retirever.invoke(query)
 
     llm = ChatOllama(model="tinydolphin:latest")
+    SYSTEM_TEMPLATE = """
+                    Answer the user's questions based on the below context. 
+                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
+
+                    <context>
+                    {context}
+                    </context>
+                    """
+    question_answering_prompt = ChatPromptTemplate.from_messages(
+                [("system",
+                    SYSTEM_TEMPLATE,),
+                    MessagesPlaceholder(variable_name="messages"),
+                    ])
+    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
+    result = document_chain.invoke(
+            {
+                "context": docs,
+                "messages": [
+                    HumanMessage(content=query)
+                ],
+            }
+        )
+    return result
+
+def jarvis_rag_dolphin_phi(query):
+    embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
+    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
+    docs = retirever.invoke(query)
+
+    llm = ChatOllama(model="dolphin-phi:latest")
+    SYSTEM_TEMPLATE = """
+                    Answer the user's questions based on the below context. 
+                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
+
+                    <context>
+                    {context}
+                    </context>
+                    """
+    question_answering_prompt = ChatPromptTemplate.from_messages(
+                [("system",
+                    SYSTEM_TEMPLATE,),
+                    MessagesPlaceholder(variable_name="messages"),
+                    ])
+    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
+    result = document_chain.invoke(
+            {
+                "context": docs,
+                "messages": [
+                    HumanMessage(content=query)
+                ],
+            }
+        )
+    return result
+
+def jarvis_rag_phi3(query):
+    embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
+    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
+    docs = retirever.invoke(query)
+
+    llm = ChatOllama(model="phi3:latest")
+    SYSTEM_TEMPLATE = """
+                    Answer the user's questions based on the below context. 
+                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
+
+                    <context>
+                    {context}
+                    </context>
+                    """
+    question_answering_prompt = ChatPromptTemplate.from_messages(
+                [("system",
+                    SYSTEM_TEMPLATE,),
+                    MessagesPlaceholder(variable_name="messages"),
+                    ])
+    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
+    result = document_chain.invoke(
+            {
+                "context": docs,
+                "messages": [
+                    HumanMessage(content=query)
+                ],
+            }
+        )
+    return result
+
+def jarvis_rag_llama3(query):
+    embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
+    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
+    docs = retirever.invoke(query)
+
+    llm = ChatOllama(model="llama3:latest")
     SYSTEM_TEMPLATE = """
                     Answer the user's questions based on the below context. 
                     If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
@@ -229,8 +319,8 @@ def call_moondream(input_voice):
     return Response(content=json_str, media_type='application/json')
 
 @app.get("/call_dolphinphi")
-def call_dophin_phi(input_voice):
-    res = jarvis_dophin_phi(input_voice)
+def call_dolphin_phi(input_voice):
+    res = jarvis_dolphin_phi(input_voice)
     result = {"output":res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
@@ -261,6 +351,28 @@ def call_groq_llama3_8b(input_voice):
 @app.get("/call_rag_tinydolphin")
 def call_rag_tinydolphin(query):
     res = jarvis_rag_tinydolphin(query)
+    result = {"output":res}
+    json_str = json.dumps(result, indent=4, default=str)
+    return Response(content=json_str, media_type='application/json')
+
+@app.get("/call_rag_dolphin_phi")
+def call_rag_dolphin_phi(query):
+    res = jarvis_rag_dolphin_phi(query)
+    result = {"output":res}
+    json_str = json.dumps(result, indent=4, default=str)
+    return Response(content=json_str, media_type='application/json')
+
+
+@app.get("/call_rag_phi3")
+def call_rag_phi3(query):
+    res = jarvis_rag_phi3(query)
+    result = {"output":res}
+    json_str = json.dumps(result, indent=4, default=str)
+    return Response(content=json_str, media_type='application/json')
+
+@app.get("/call_rag_llama3")
+def call_rag_llama3(query):
+    res = jarvis_rag_llama3(query)
     result = {"output":res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
