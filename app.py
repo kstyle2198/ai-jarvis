@@ -3,6 +3,14 @@ import time
 import numpy as np
 import requests
 import json
+from datetime import datetime, timedelta
+
+def calculate_time_delta(start_time, end_time):
+    # Calculate the time difference (time delta) in seconds
+    time_difference = end_time - start_time
+    seconds = time_difference.seconds
+    return seconds
+
 
 
 sample_template = '''
@@ -38,32 +46,31 @@ if "path" not in st.session_state:
     st.session_state.rag_results = []
     st.session_state.rag_docs = []
     st.session_state.rag_output = ""
+    st.session_state.trans = ""
     st.session_state.rag_messages = [{"role": "assistant", "content": "How can I help you?"}]
     st.session_state.rag_reversed_messages = ""
-
 
 def stream_data(output):
     for word in output.split(" "):
         yield word + " "
         time.sleep(0.1)
 
-
 @st.experimental_fragment
 def chatbot():
-
-    llm_name = st.radio("🐬 **Select LLM**", options=["moondream(1B)", "tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=2, key="dsfv")
-    st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
-    llm_name
+    with st.container():
+        llm_name = st.radio("🐬 **Select LLM**", options=["moondream(1B)", "tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=2, key="dsfv")
+        st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
+        llm_name
     with st.expander("🐳 **Custom Prompt**"):
         custom_template = st.markdown(sample_template)
+
     if st.button("💬 Call Jarvis"):
-        
-        
         res1 = requests.get(url=f"http://127.0.0.1:8000/jarvis_stt")
+        start_time = datetime.now()
         input_voice = res1.json()
         input_voice = input_voice["input_voice"]
+        
         st.session_state.messages.append({"role": "user", "content": input_voice})
-
         if input_voice:
             if llm_name == "tinydolphin(1.1B)":
                 res2 = requests.get(url=f"http://127.0.0.1:8000/call_tinydolphin?input_voice={input_voice}")
@@ -79,12 +86,23 @@ def chatbot():
                 res2 = requests.get(url=f"http://127.0.0.1:8000/call_groq_llama3?input_voice={input_voice}")
             output = res2.json()
             st.session_state.output = output['output']
-            st.session_state.output
+            end_time = datetime.now()
+
+            trans_res = requests.get(url=f"http://127.0.0.1:8000/call_trans?txt={st.session_state.output}")
+            trans_res = trans_res.json()
+            st.session_state.trans = trans_res['output'][0]
+            
+            delta = calculate_time_delta(start_time, end_time)
+            st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+
+            col111, col112 = st.columns(2)
+            with col111: st.session_state.output
+            with col112: st.session_state.trans
+
             st.session_state.messages.append({"role": "assistant", "content": st.session_state.output}) 
 
         if st.session_state.output:
             res = requests.get(url=f"http://127.0.0.1:8000/jarvis_tts?output={st.session_state.output}")
-
 
     st.markdown("---")
     st.session_state.reversed_messages = st.session_state.messages[::-1]
@@ -118,73 +136,66 @@ if "retriever" not in st.session_state:
     st.session_state.retirever = ""
 
 @st.experimental_fragment
-def my_rag(pdf_text):
+def create_vectordb(pdf_text):
     with st.spinner("Processing..."):
         if st.button("Create Vectorstore"):
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            texts = text_splitter.split_text(pdf_text)
-            embeddings = OllamaEmbeddings(model="nomic-embed-text")
-            vectorstore = FAISS.from_texts(texts, embeddings, distance_strategy=DistanceStrategy.DOT_PRODUCT)
-            st.session_state.retirever = vectorstore.as_retriever(k=4)
+            splitted_texts = text_splitter.split_text(pdf_text)
+            embed_model = OllamaEmbeddings(model="nomic-embed-text")
+            # vectorstore = FAISS.from_texts(splitted_texts, embeddings, distance_strategy=DistanceStrategy.DOT_PRODUCT)
+            # st.session_state.retirever = vectorstore.as_retriever(k=4)
+            db=Chroma.from_texts(splitted_texts, embedding=embed_model, persist_directory="test_index")
         if st.session_state.retirever: 
             st.session_state.retirever
             st.info("VectorStore Created")
 
+def do_rag():
+    with st.container():
+        llm_name = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "Groq_llama3"], index=0, key="dsssv")
+        st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
+        llm_name
     with st.spinner("Processing..."):
         if st.button("💬 RAG Jarvis"):
 
             res1 = requests.get(url=f"http://127.0.0.1:8000/jarvis_stt")
+            start_time = datetime.now()
             query = res1.json()
             query = query["input_voice"]
+            
 
-            docs = st.session_state.retirever.invoke(query)
-            with st.expander("Retrieved Documnets"):
-                docs
 
-            # llm = ChatOllama(model="moondream:latest")  #1B
-            # llm = ChatOllama(model="tinydolphin:latest")  #1.1B
-            # llm = ChatOllama(model="dolphin-phi:latest")  #2.7B
-            # llm = ChatOllama(model="phi3:latest")         #3.8
-            llm = ChatGroq(groq_api_key=groq_api_key, model_name='llama3-8b-8192')
+            if llm_name == "tinydolphin(1.1B)":
+                rag_res = requests.get(url=f"http://127.0.0.1:8000/call_rag_tinydolphin?query={query}")
+            else:
+                rag_res = requests.get(url=f"http://127.0.0.1:8000/call_rag_groq_llama3?query={query}")
+            rag_res = rag_res.json()
+            st.session_state.rag_output = rag_res['output']
+            end_time = datetime.now()
+            delta = calculate_time_delta(start_time, end_time)
+            
+            trans_res = requests.get(url=f"http://127.0.0.1:8000/call_trans?txt={st.session_state.rag_output}")
+            trans_res = trans_res.json()
+            st.session_state.trans = trans_res['output'][0]
+            st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+            col111, col112 = st.columns(2)
+            with col111: st.session_state.rag_output
+            with col112: st.session_state.trans
 
-            SYSTEM_TEMPLATE = """
-                            Answer the user's questions based on the below context. 
-                            If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
 
-                            <context>
-                            {context}
-                            </context>
-                            """
-            question_answering_prompt = ChatPromptTemplate.from_messages(
-                [("system",
-                    SYSTEM_TEMPLATE,),
-                    MessagesPlaceholder(variable_name="messages"),
-                    ])
-            document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-            result = document_chain.invoke(
-                    {
-                        "context": docs,
-                        "messages": [
-                            HumanMessage(content=query)
-                        ],
-                    }
-                )
-
-            st.session_state.rag_output = result
             st.session_state.rag_messages.append({"role": "user", "content": query})
-            st.session_state.rag_docs.append(docs)
+            # st.session_state.rag_docs.append(docs)
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output}) 
-            st.markdown("---")
-            st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
-            for msg in st.session_state.rag_reversed_messages:
-                if msg["role"] == "user":
-                    st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
-                else:
-                    st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
             if st.session_state.rag_output:
                 res = requests.get(url=f"http://127.0.0.1:8000/jarvis_tts?output={st.session_state.rag_output}")
-    
+        
+        st.markdown("---")
+        st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+        for msg in st.session_state.rag_reversed_messages:
+            if msg["role"] == "user":
+                st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
+            else:
+                st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
 from pathlib import Path
 parent_dir = Path(__file__).parent
@@ -204,8 +215,7 @@ if __name__ == "__main__":
 
     tab1, tab2 = st.tabs(["**Chatbot**", "**RAG**"])
     with tab1:
-        with st.container():
-            chatbot()
+        chatbot()
 
     with tab2:
         with st.expander("📑 File Uploader"):
@@ -221,23 +231,22 @@ if __name__ == "__main__":
                 st.info("Saving a file is completed")
             else:
                 st.empty()
-
-        file_list2 = list_selected_files(base_dir, "pdf")
-        sel21 = st.selectbox("📌 파일을 선택해주세요", file_list2, index=None)
-        if sel21:
-            st.session_state.path = os.path.join(base_dir, sel21)
-        
-        with st.expander("✏️ PDF TEXT"):
+            try:
+                file_list2 = list_selected_files(base_dir, "pdf")
+                sel21 = st.selectbox("📌 파일을 선택해주세요", file_list2, index=None)
+                st.session_state.path = os.path.join(base_dir, sel21)
+                st.session_state.path
+            except: pass
             if st.session_state.path: 
                 pdf = PyPDF2.PdfReader(st.session_state.path)
                 pdf_text = ""
                 for page in pdf.pages:
                     pdf_text += page.extract_text()
+                create_vectordb(pdf_text)
                 with st.container(height=300):
                     pdf_text
-
-        try:
-            my_rag(pdf_text)
+        try:            
+            do_rag()
 
         except:
             st.empty()
