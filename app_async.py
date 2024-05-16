@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import streamlit as st
 from datetime import datetime
+import time
 
 st.markdown(
             """
@@ -21,6 +22,11 @@ if "results" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "How can I help you?"}]
     st.session_state.reversed_messages = ""
+
+def stream_data(output):
+    for word in output.split(" "):
+        yield word + " "
+        time.sleep(0.1)
 
 async def fetch(session, url):
     async with session.get(url) as response:
@@ -98,6 +104,30 @@ async def chat_main():
                     tts_url = f"http://127.0.0.1:8000/jarvis_tts?output={st.session_state.output}"
                     await fetch(session, tts_url)
 
+    input_voice = st.text_input("Submit your Queries")
+    if st.button("💬 Submit to Jarvis"):
+        async with aiohttp.ClientSession() as session:
+            # res1 = await fetch(session, "http://127.0.0.1:8000/jarvis_stt")
+            # start_time = datetime.now()
+            # input_voice = res1.get("input_voice")
+
+            st.session_state.messages.append({"role": "user", "content": input_voice})
+            if input_voice:
+                start_time = datetime.now()
+                output, trans_output = await call_jarvis(llm_name, input_voice)
+                st.session_state.output = output
+                st.session_state.trans = trans_output
+                end_time = datetime.now()
+
+                delta = calculate_time_delta(start_time, end_time)
+                st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+
+                col111, col112 = st.columns(2)
+                with col111: st.write_stream(stream_data(st.session_state.output))
+                with col112: st.write(st.session_state.trans)
+
+                st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
+
     st.markdown("---")
     st.session_state.reversed_messages = st.session_state.messages[::-1]
     for msg in st.session_state.reversed_messages:
@@ -163,40 +193,59 @@ async def rag_main():
         llm_name = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsssv")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
-    with st.spinner("Processing..."):
-        if st.button("💬 RAG Jarvis"):
-            async with aiohttp.ClientSession() as session:
-                res1 = await fetch(session, "http://127.0.0.1:8000/jarvis_stt")
-                start_time = datetime.now()
-                query = res1.get("input_voice")
+    if st.button("💬 RAG Jarvis"):
+        async with aiohttp.ClientSession() as session:
+            res1 = await fetch(session, "http://127.0.0.1:8000/jarvis_stt")
+            start_time = datetime.now()
+            query = res1.get("input_voice")
 
-                if query:
-                    output, trans_output = await call_rag(llm_name, query)
-                    st.session_state.rag_output = output
-                    st.session_state.trans = trans_output
-                    end_time = datetime.now()
+            if query:
+                output, trans_output = await call_rag(llm_name, query)
+                st.session_state.rag_output = output
+                st.session_state.trans = trans_output
+                end_time = datetime.now()
 
-                    delta = calculate_time_delta(start_time, end_time)
-                    st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+                delta = calculate_time_delta(start_time, end_time)
+                st.warning(f"⏱️ 응답소요시간(초) : {delta}")
 
-                    col111, col112 = st.columns(2)
-                    with col111: st.write(st.session_state.rag_output)
-                    with col112: st.write(st.session_state.trans)
+                col111, col112 = st.columns(2)
+                with col111: st.write(st.session_state.rag_output)
+                with col112: st.write(st.session_state.trans)
 
-                    st.session_state.rag_messages.append({"role": "user", "content": query})
-                    st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+                st.session_state.rag_messages.append({"role": "user", "content": query})
+                st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
-                    if st.session_state.rag_output:
-                        tts_url = f"http://127.0.0.1:8000/jarvis_tts?output={st.session_state.rag_output}"
-                        await fetch(session, tts_url)
+                if st.session_state.rag_output:
+                    tts_url = f"http://127.0.0.1:8000/jarvis_tts?output={st.session_state.rag_output}"
+                    await fetch(session, tts_url)
 
-        st.markdown("---")
-        st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
-        for msg in st.session_state.rag_reversed_messages:
-            if msg["role"] == "user":
-                st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
-            else:
-                st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
+    query = st.text_input("Send your Queries")
+    if st.button("💬 Query to Jarvis"):
+            start_time = datetime.now()
+
+            if query:
+                output, trans_output = await call_rag(llm_name, query)
+                st.session_state.rag_output = output
+                st.session_state.trans = trans_output
+                end_time = datetime.now()
+
+                delta = calculate_time_delta(start_time, end_time)
+                st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+
+                col111, col112 = st.columns(2)
+                with col111: st.write_stream(stream_data(st.session_state.rag_output))
+                with col112: st.write(st.session_state.trans)
+
+                st.session_state.rag_messages.append({"role": "user", "content": query})
+                st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+
+    st.markdown("---")
+    st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+    for msg in st.session_state.rag_reversed_messages:
+        if msg["role"] == "user":
+            st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
+        else:
+            st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
 
 from pathlib import Path
@@ -212,7 +261,7 @@ def list_selected_files(path, 확장자):
 
 
 if __name__ == "__main__":
-    st.title("⚓ :blue[HD Jarvis]")
+    st.title("⚓ :blue[AI Jarvis]")
     st.markdown("---")
 
     tab1, tab2 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**"])
