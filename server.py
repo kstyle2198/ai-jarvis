@@ -41,7 +41,7 @@ def recording_finished():
     print("Speech end detected... transcribing...")
 
 
-def jarvis_stt():
+async def jarvis_stt():
     with AudioToTextRecorder(spinner=False, 
                             model="small",   #'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1', 'large-v2'.
                             language=language, 
@@ -52,78 +52,57 @@ def jarvis_stt():
                             ) as recorder:
         ready_msg = 'Say "Jarvis" then speak.'
         print(ready_msg)
-        input_voice = recorder.text()
+        
+        # Assuming recorder.text() is a blocking call, run it in a separate thread
+        input_voice = await asyncio.to_thread(recorder.text)
         print(input_voice)
         return input_voice
 
-def jarvis_tts(input_txt, language=language):
+async def jarvis_tts(input_txt, language=language):
     def dummy_generator(input_txt):
         yield input_txt
         print(input_txt)
-    TextToAudioStream(SystemEngine(voice=selected_voice,print_installed_voices=False)).feed(dummy_generator(input_txt)).play(language=language)
+    
+    tts = TextToAudioStream(SystemEngine(voice=selected_voice, print_installed_voices=False))
+    
+    # Assuming feed and play are blocking calls, run them in a separate thread
+    await asyncio.to_thread(tts.feed, dummy_generator(input_txt))
+    await asyncio.to_thread(tts.play, language=language)
 
-def jarvis_tinydophin(input_voice):
+async def jarvis_chat(llm_name, input_voice):
     global custom_template
-    llm = ChatOllama(model="tinydolphin:latest")
+    llm = ChatOllama(model=llm_name)
     prompt = ChatPromptTemplate.from_template(custom_template)
     query = {"query": input_voice}
     chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
-    return sentence
-        
-def jarvis_moondream(input_voice):
-    global custom_template
-    llm = ChatOllama(model="moondream:latest")
-    prompt = ChatPromptTemplate.from_template(custom_template)
-    query = {"query": input_voice}
-    chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
+    
+    # Assuming invoke is a blocking operation, use asyncio.to_thread
+    sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
 
-def jarvis_dolphin_phi(input_voice):
-    global custom_template
-    llm = ChatOllama(model="dolphin-phi:latest")
-    prompt = ChatPromptTemplate.from_template(custom_template)
-    query = {"query": input_voice}
-    chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
-    return sentence
 
-def jarvis_ph3_4b(input_voice):
-    global custom_template
-    llm = ChatOllama(model="phi3:latest")
-    prompt = ChatPromptTemplate.from_template(custom_template)
-    query = {"query": input_voice}
-    chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
-    return sentence
-
-def jarvis_llama3_8b(input_voice):
-    global custom_template
-    llm = ChatOllama(model="llama3:latest")
-    prompt = ChatPromptTemplate.from_template(custom_template)
-    query = {"query": input_voice}
-    chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
-    return sentence
-
-def jarvis_groq_llama3_8b(input_voice):
+async def jarvis_groq_llama3_8b(input_voice):
     global custom_template
     llm = ChatGroq(groq_api_key=groq_api_key, model_name='llama3-8b-8192')
     prompt = ChatPromptTemplate.from_template(custom_template)
     query = {"query": input_voice}
     chain = prompt | llm | StrOutputParser()
-    sentence = chain.invoke(query)
+
+    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
+    sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
 
 
-def jarvis_rag_tinydolphin(query):
-    embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
-    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
-    docs = retirever.invoke(query)
 
-    llm = ChatOllama(model="tinydolphin:latest")
+async def jarvis_rag(model_name, query):
+    embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    vectordb = Chroma(persist_directory="test_index", embedding_function=embed_model)
+    retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+
+    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
+    docs = await asyncio.to_thread(retriever.invoke, query)
+
+    llm = ChatOllama(model=model_name)
     SYSTEM_TEMPLATE = """
                     Answer the user's questions based on the below context. 
                     If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
@@ -138,114 +117,26 @@ def jarvis_rag_tinydolphin(query):
                     MessagesPlaceholder(variable_name="messages"),
                     ])
     document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-    result = document_chain.invoke(
-            {
-                "context": docs,
-                "messages": [
-                    HumanMessage(content=query)
-                ],
-            }
-        )
+
+    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
+    result = await asyncio.to_thread(
+        document_chain.invoke,
+        {
+            "context": docs,
+            "messages": [
+                HumanMessage(content=query)
+            ],
+        }
+    )
     return result
 
-def jarvis_rag_dolphin_phi(query):
+async def jarvis_rag_groq_llama3(query):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
-    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
-    docs = retirever.invoke(query)
+    vectordb = Chroma(persist_directory="test_index", embedding_function=embed_model)
+    retriever = vectordb.as_retriever(search_kwargs={"k": 3})
 
-    llm = ChatOllama(model="dolphin-phi:latest")
-    SYSTEM_TEMPLATE = """
-                    Answer the user's questions based on the below context. 
-                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
-
-                    <context>
-                    {context}
-                    </context>
-                    """
-    question_answering_prompt = ChatPromptTemplate.from_messages(
-                [("system",
-                    SYSTEM_TEMPLATE,),
-                    MessagesPlaceholder(variable_name="messages"),
-                    ])
-    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-    result = document_chain.invoke(
-            {
-                "context": docs,
-                "messages": [
-                    HumanMessage(content=query)
-                ],
-            }
-        )
-    return result
-
-def jarvis_rag_phi3(query):
-    embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
-    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
-    docs = retirever.invoke(query)
-
-    llm = ChatOllama(model="phi3:latest")
-    SYSTEM_TEMPLATE = """
-                    Answer the user's questions based on the below context. 
-                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
-
-                    <context>
-                    {context}
-                    </context>
-                    """
-    question_answering_prompt = ChatPromptTemplate.from_messages(
-                [("system",
-                    SYSTEM_TEMPLATE,),
-                    MessagesPlaceholder(variable_name="messages"),
-                    ])
-    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-    result = document_chain.invoke(
-            {
-                "context": docs,
-                "messages": [
-                    HumanMessage(content=query)
-                ],
-            }
-        )
-    return result
-
-def jarvis_rag_llama3(query):
-    embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
-    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
-    docs = retirever.invoke(query)
-
-    llm = ChatOllama(model="llama3:latest")
-    SYSTEM_TEMPLATE = """
-                    Answer the user's questions based on the below context. 
-                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
-
-                    <context>
-                    {context}
-                    </context>
-                    """
-    question_answering_prompt = ChatPromptTemplate.from_messages(
-                [("system",
-                    SYSTEM_TEMPLATE,),
-                    MessagesPlaceholder(variable_name="messages"),
-                    ])
-    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-    result = document_chain.invoke(
-            {
-                "context": docs,
-                "messages": [
-                    HumanMessage(content=query)
-                ],
-            }
-        )
-    return result
-
-def jarvis_rag_groq_llama3(query):
-    embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function = embed_model)
-    retirever = vectordb.as_retriever(search_kwargs = {"k" : 3})
-    docs = retirever.invoke(query)
+    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
+    docs = await asyncio.to_thread(retriever.invoke, query)
 
     llm = ChatGroq(groq_api_key=groq_api_key, model_name='llama3-8b-8192')
     SYSTEM_TEMPLATE = """
@@ -262,17 +153,18 @@ def jarvis_rag_groq_llama3(query):
                     MessagesPlaceholder(variable_name="messages"),
                     ])
     document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-    result = document_chain.invoke(
-            {
-                "context": docs,
-                "messages": [
-                    HumanMessage(content=query)
-                ],
-            }
-        )
+
+    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
+    result = await asyncio.to_thread(
+        document_chain.invoke,
+        {
+            "context": docs,
+            "messages": [
+                HumanMessage(content=query)
+            ],
+        }
+    )
     return result
-
-
 
 import asyncio
 from aiogoogletrans import Translator
@@ -289,105 +181,70 @@ async def trans_main(txt):
     return translations
 
 ##########################################################################################################################################
+from fastapi import FastAPI, Request, Response
+import json
+from pydantic import BaseModel
+import asyncio
+
 app = FastAPI()
 
+class OllamaRequest(BaseModel):
+    llm_name: str
+    input_voice: str
 
-@app.get("/jarvis_stt")
-def call_jarvis_stt():
-    res = jarvis_stt()
-    result = {"input_voice":res}
+class GroqRequest(BaseModel):
+    input_voice: str
+
+class TTSRequest(BaseModel):
+    output: str
+
+class TRANSRequest(BaseModel):
+    txt: str
+
+@app.post("/jarvis_stt")
+async def call_jarvis_stt():
+    res = await jarvis_stt()
+    result = {"input_voice": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.get("/jarvis_tts")
-def call_jarvis_tts(output):
-    res = jarvis_tts(output)
-    return res
+@app.post("/jarvis_tts")
+async def call_jarvis_tts(request: TTSRequest):
+    await jarvis_tts(request.output)
+    return {"status": "completed"}
 
-@app.get("/call_tinydolphin")
-def call_tinydolphin(input_voice):
-    res = jarvis_tinydophin(input_voice)
-    result = {"output":res}
+@app.post("/call_jarvis")
+async def call_jarvis_chat(request: OllamaRequest):
+    res = await jarvis_chat(request.llm_name, request.input_voice)
+    result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.get("/call_moondream")
-def call_moondream(input_voice):
-    res = jarvis_moondream(input_voice)
-    result = {"output":res}
+@app.post("/call_groq_llama3")
+async def call_groq_llama3_8b(request: GroqRequest):
+    res = await jarvis_groq_llama3_8b(request.input_voice)
+    result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.get("/call_dolphinphi")
-def call_dolphin_phi(input_voice):
-    res = jarvis_dolphin_phi(input_voice)
-    result = {"output":res}
+@app.post("/call_rag_jarvis")
+async def call_jarvis_rag(request: OllamaRequest):
+    res = await jarvis_rag(request.llm_name, request.input_voice)
+    result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.get("/call_phi3")
-def call_phi3_4b(input_voice):
-    res = jarvis_ph3_4b(input_voice)
-    result = {"output":res}
+@app.post("/call_rag_groq_llama3")
+async def call_rag_groq_llama3(request: GroqRequest):
+    res = await jarvis_rag_groq_llama3(request.input_voice)
+    result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.get("/call_llama3")
-def call_llama3_8b(input_voice):
-    res = jarvis_llama3_8b(input_voice)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.get("/call_groq_llama3")
-def call_groq_llama3_8b(input_voice):
-    res = jarvis_groq_llama3_8b(input_voice)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-
-
-@app.get("/call_rag_tinydolphin")
-def call_rag_tinydolphin(query):
-    res = jarvis_rag_tinydolphin(query)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.get("/call_rag_dolphin_phi")
-def call_rag_dolphin_phi(query):
-    res = jarvis_rag_dolphin_phi(query)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-
-@app.get("/call_rag_phi3")
-def call_rag_phi3(query):
-    res = jarvis_rag_phi3(query)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.get("/call_rag_llama3")
-def call_rag_llama3(query):
-    res = jarvis_rag_llama3(query)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.get("/call_rag_groq_llama3")
-def call_rag_groq_llama3(query):
-    res = jarvis_rag_groq_llama3(query)
-    result = {"output":res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.get("/call_trans")
-def call_trans_main(txt):
-    res = asyncio.run(trans_main(txt))
-    result = {"output":res}
+@app.post("/call_trans")
+async def call_trans_main(request: TRANSRequest):
+    res = await trans_main(request.txt)
+    result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
