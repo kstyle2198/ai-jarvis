@@ -128,7 +128,7 @@ async def jarvis_rag(model_name, query):
             ],
         }
     )
-    return result
+    return docs, result
 
 async def jarvis_rag_groq_llama3(query):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
@@ -164,7 +164,7 @@ async def jarvis_rag_groq_llama3(query):
             ],
         }
     )
-    return result
+    return docs, result
 
 import asyncio
 from aiogoogletrans import Translator
@@ -213,6 +213,13 @@ async def call_jarvis_tts(request: TTSRequest):
     await jarvis_tts(request.output)
     return {"status": "completed"}
 
+@app.post("/jarvis_trans")
+async def jarvis_trans_main(request: TRANSRequest):
+    res = await trans_main(request.txt)
+    result = {"output": res}
+    json_str = json.dumps(result, indent=4, default=str)
+    return Response(content=json_str, media_type='application/json')
+
 @app.post("/call_jarvis")
 async def call_jarvis_chat(request: OllamaRequest):
     res = await jarvis_chat(request.llm_name, request.input_voice)
@@ -241,12 +248,7 @@ async def call_rag_groq_llama3(request: GroqRequest):
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-@app.post("/call_trans")
-async def call_trans_main(request: TRANSRequest):
-    res = await trans_main(request.txt)
-    result = {"output": res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
+
 
 
 if __name__ == '__main__':

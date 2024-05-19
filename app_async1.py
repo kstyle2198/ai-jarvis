@@ -3,9 +3,11 @@ import aiohttp
 import streamlit as st
 from datetime import datetime
 import time
-import requests
+from utils import CustomPDFLoader, ShowPdf
 
-
+# st.set_page_config(
+#         page_title="AI Jarvis",
+#         layout="wide")
 st.markdown(
             """
         <style>
@@ -59,7 +61,7 @@ async def tts(output):
         return f"Error: {str(e)}"
 
 async def trans(txt):
-    url = "http://127.0.0.1:8000/call_trans"
+    url = "http://127.0.0.1:8000/jarvis_trans"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json={"txt": txt}) as response:
@@ -115,7 +117,7 @@ async def chat_main():
     with st.expander("🐳 **Custom Prompt**"):
         custom_template = st.markdown(sample_template)
     with st.container():
-        llm1 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsfv")
+        llm1 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsfv", help="Internet is not needed, except for 'Groq_llama3'")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
         if llm1 == "tinydolphin(1.1B)":
             llm_name = "tinydolphin:latest"
@@ -128,8 +130,8 @@ async def chat_main():
         else:
             llm_name = "Groq_llama3"
 
-    text_input = st.text_input("Send your Queries", key="dldfs")
-    call_btn = st.button("💬 Call Jarvis")
+    text_input = st.text_input("✏️ Send your Qeustions", placeholder="Input your Qeustions", key="dldfs")
+    call_btn = st.button("💬 Call Jarvis", help="Without Text Query, Click & Say 'Jarvis' after 2~3 seconds. Jarvis will replay 'Yes, Master' and then Speak your Requests")
     if  call_btn and text_input =="":
         res = await stt()
         input_voice = res['input_voice']
@@ -142,7 +144,7 @@ async def chat_main():
             st.session_state.trans = trans_output
             end_time = datetime.now()
             delta = calculate_time_delta(start_time, end_time)
-            st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+            st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.output)
             with col112: st.write(st.session_state.trans)
@@ -162,7 +164,7 @@ async def chat_main():
             end_time = datetime.now()
 
             delta = calculate_time_delta(start_time, end_time)
-            st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+            st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
 
             col111, col112 = st.columns(2)
             with col111: st.write_stream(stream_data(st.session_state.output))
@@ -171,6 +173,7 @@ async def chat_main():
             st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
             if st.session_state.output:
                 await tts(st.session_state.output)
+            text_input = ""
 
     st.markdown("---")
     st.session_state.reversed_messages = st.session_state.messages[::-1]
@@ -181,14 +184,16 @@ async def chat_main():
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
 
-#### RAG 함수 #################################################    
+#### VectorDB 함수 #################################################    
 if "retriever" not in st.session_state:
     st.session_state.retirever = ""
 
 if "path" not in st.session_state:
     st.session_state.path = ""
+    st.session_state.pages = ""
+    st.session_state.retrievals = ""
     st.session_state.rag_results = []
-    st.session_state.rag_docs = []
+    st.session_state.rag_doc = ""
     st.session_state.rag_output = ""
     st.session_state.trans = ""
     st.session_state.rag_messages = [{"role": "assistant", "content": "How can I help you?"}]
@@ -198,16 +203,23 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
-def create_vectordb(pdf_text):  # VectorDB생성 및 저장
+show_pdf = ShowPdf()
+custom_loader = CustomPDFLoader()
+
+
+
+def create_vectordb(parsed_text):  # VectorDB생성 및 저장
     with st.spinner("Processing..."):
-        if st.button("Create Vectorstore"):
+        if st.button("Create Vectorstore", help="You can add your PDFs in the VectorStore After Parsing"):
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            splitted_texts = text_splitter.split_text(pdf_text)
+            splitted_texts = text_splitter.split_documents(parsed_text)
             embed_model = OllamaEmbeddings(model="nomic-embed-text")
-            db=Chroma.from_texts(splitted_texts, embedding=embed_model, persist_directory="test_index")
+            db=Chroma.from_documents(splitted_texts, embedding=embed_model, persist_directory="test_index")
         if st.session_state.retirever: 
             st.session_state.retirever
             st.info("VectorStore Created")
+
+#### RAG 함수 #################################################    
 
 async def call_rag(llm_name, query):
     try:
@@ -218,18 +230,19 @@ async def call_rag(llm_name, query):
             url = "http://127.0.0.1:8000/call_rag_jarvis"
             res = await api_ollama(url, llm_name, query)
         
-        output = res["output"]
+        retrival_output = res["output"][0]
+        output = res["output"][1]
         trans_res = await trans(output)
         trans_output = trans_res['output'][0]
         
-        return output, trans_output
+        return retrival_output, output, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
 
     
 async def rag_main():
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsssv")
+        llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3", "Groq_llama3"], index=1, key="dsssv", help="Internet is not needed, except for 'Groq_llama3'")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     with st.container():
         if llm2 == "tinydolphin(1.1B)":
@@ -243,8 +256,8 @@ async def rag_main():
         else:
             llm_name = "Groq_llama3"
 
-    text_input = st.text_input("Send your Queries", key="dls")
-    rag_btn = st.button("💬 RAG Jarvis")
+    text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
+    rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis' after 2~3 seconds. Jarvis will replay 'Yes, Master' and then Speak your Requests")
 
     if  rag_btn and text_input == "":
         res = await stt()
@@ -253,16 +266,19 @@ async def rag_main():
         st.session_state.rag_messages.append({"role": "user", "content": query})
 
         if query:
-            output, trans_output = await call_rag(llm_name, query)
+            retrival_output, output, trans_output = await call_rag(llm_name, query)
+            st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
             end_time = datetime.now()
             delta = calculate_time_delta(start_time, end_time)
-            st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+            st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
 
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.rag_output)
             with col112: st.write(st.session_state.trans)
+            with st.expander("Retrieval doc"):
+                st.session_state.rag_doc
 
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
@@ -274,22 +290,25 @@ async def rag_main():
         query = text_input
         st.session_state.rag_messages.append({"role": "user", "content": query})
 
-        output, trans_output = await call_rag(llm_name, query)
+        retrival_output, output, trans_output = await call_rag(llm_name, query)
+        st.session_state.rag_doc = retrival_output
         st.session_state.rag_output = output
         st.session_state.trans = trans_output
         end_time = datetime.now()
 
         delta = calculate_time_delta(start_time, end_time)
-        st.warning(f"⏱️ 응답소요시간(초) : {delta}")
+        st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
 
         col111, col112 = st.columns(2)
-        with col111: st.write_stream(stream_data(st.session_state.rag_output))
+        with col111: st.write(st.session_state.rag_output)
         with col112: st.write(st.session_state.trans)
+        with st.expander("Retrieval doc"):
+            st.session_state.rag_doc
 
         st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
         if st.session_state.rag_output:
-                await tts(st.session_state.rag_output)
+            await tts(st.session_state.rag_output)
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
@@ -309,15 +328,23 @@ if the query does not give you enough information, return a question for additio
 for example, 'could you give me more detailed informations about it?'
 '''
 
+
+
+
+
 if __name__ == "__main__":
     st.title("⚓ :blue[AI Jarvis]")
-    st.markdown("---")
-
+    with st.expander("🚢 Note"):
+        st.markdown("""
+                    - This AI app is created for :green[**Local Usages without Internet**].
+                    - :orange[**Chatbot**] is for Common Conversations regarding your interests like food, movie, etc.
+                    - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore(saving your PDFs)
+                    """)
     tab1, tab2 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**"])
     with tab1:
         asyncio.run(chat_main())
     with tab2:
-        with st.expander("📑 File Uploader anc VectorStore"):
+        with st.expander("📑 File Uploader"):
             uploaded_file = st.file_uploader("📎Upload your file")
             if uploaded_file:
                 temp_dir = base_dir   # tempfile.mkdtemp()  --->  import tempfile 필요, 임시저장디렉토리 자동지정함
@@ -330,20 +357,34 @@ if __name__ == "__main__":
                 st.info("Saving a file is completed")
             else:
                 st.empty()
+
+        with st.expander("✏️ Custom Parsing"):
             try:
                 file_list2 = list_selected_files(base_dir, "pdf")
-                sel21 = st.selectbox("📌 파일을 선택해주세요", file_list2, index=None)
+                sel21 = st.selectbox("📌 Select your File", file_list2, index=None, placeholder="Select your file to parse", help="Table to Markdown and Up/Down Cropping")
                 st.session_state.path = os.path.join(base_dir, sel21)
                 st.session_state.path
-            except: pass
-            if st.session_state.path: 
-                pdf = PyPDF2.PdfReader(st.session_state.path)
-                pdf_text = ""
-                for page in pdf.pages:
-                    pdf_text += page.extract_text()
-                create_vectordb(pdf_text)
-                with st.container(height=300):
-                    pdf_text
+                crop_check = st.checkbox("Crop", value=True)
+                with st.spinner("processing.."):
+                    if st.button("Parsing"):
+                        st.session_state.pages = ""
+                        st.session_state.pages = custom_loader.lazy_load(st.session_state.path, crop_check)
+                st.session_state.pages
+            except:
+                pass
+        with st.expander("🗂️ VectorStore(DB)"):
+            create_vectordb(st.session_state.pages)
+
+        with st.expander("🔎 Retrieval Test"):
+            embed_model = OllamaEmbeddings(model="nomic-embed-text")
+            vectordb = Chroma(persist_directory="test_index", embedding_function=embed_model)
+            retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+            my_query = st.text_input("✏️ text input", placeholder="Input your target senetences for similarity search")
+            with st.spinner("Processing..."):
+                if st.button("Similarity Search"):
+                    st.session_state.retrievals = retriever.invoke(my_query)
+            st.session_state.retrievals
+
         try:
             asyncio.run(rag_main())
         except:
