@@ -79,24 +79,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "How can I help you?"}]
     st.session_state.reversed_messages = ""
 
-async def api_ollama(url, llm_name, input_voice):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"llm_name": llm_name, "input_voice": input_voice}) as response:
-                res = await response.json()
-        return res
-    except Exception as e:
-        return f"Error: {str(e)}"
 
-async def api_groq(url, input_voice):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"input_voice": input_voice}) as response:
-                res = await response.json()
-        return res
-    except Exception as e:
-        return f"Error: {str(e)}"
-    
 async def call_jarvis(llm_name, input_voice):
     async with aiohttp.ClientSession() as session:
         if llm_name == "Groq_llama3":
@@ -221,6 +204,25 @@ def create_vectordb(parsed_text):  # VectorDB생성 및 저장
 
 #### RAG 함수 #################################################    
 
+async def api_ollama(url, llm_name, input_voice):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json={"llm_name": llm_name, "input_voice": input_voice}) as response:
+                res = await response.json()
+        return res
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+async def api_groq(url, input_voice):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json={"input_voice": input_voice}) as response:
+                res = await response.json()
+        return res
+    except Exception as e:
+        return f"Error: {str(e)}"
+    
+
 async def call_rag(llm_name, query):
     try:
         if llm_name == "Groq_llama3":
@@ -339,6 +341,7 @@ if __name__ == "__main__":
                     - This AI app is created for :green[**Local Usages without Internet**].
                     - :orange[**Chatbot**] is for Common Conversations regarding your interests like food, movie, etc.
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore(saving your PDFs)
+                    - In the Dev mode, Groq API and Korean Translation API need Internet. (will be excluded in the Production Mode)
                     """)
     tab1, tab2 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**"])
     with tab1:
@@ -382,7 +385,7 @@ if __name__ == "__main__":
             my_query = st.text_input("✏️ text input", placeholder="Input your target senetences for similarity search")
             with st.spinner("Processing..."):
                 if st.button("Similarity Search"):
-                    st.session_state.retrievals = retriever.invoke(my_query)
+                    st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
             st.session_state.retrievals
 
         try:
