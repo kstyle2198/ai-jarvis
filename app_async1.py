@@ -3,7 +3,7 @@ import aiohttp
 import streamlit as st
 from datetime import datetime
 import time
-from utils import CustomPDFLoader, ShowPdf
+from utils import CustomPDFLoader, ShowPdf, ChromaViewer
 
 # st.set_page_config(
 #         page_title="AI Jarvis",
@@ -186,6 +186,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
+
 show_pdf = ShowPdf()
 custom_loader = CustomPDFLoader()
 
@@ -331,7 +332,7 @@ for example, 'could you give me more detailed informations about it?'
 '''
 
 
-
+cv = ChromaViewer
 
 
 if __name__ == "__main__":
@@ -343,7 +344,7 @@ if __name__ == "__main__":
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore(saving your PDFs)
                     - In the Dev mode, Groq API and Korean Translation API need Internet. (will be excluded in the Production Mode)
                     """)
-    tab1, tab2 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**"])
+    tab1, tab2, tab3 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **ChromaDB**"])
     with tab1:
         asyncio.run(chat_main())
     with tab2:
@@ -392,3 +393,6 @@ if __name__ == "__main__":
             asyncio.run(rag_main())
         except:
             st.empty()
+
+    with tab3:
+        cv.view_collections("test_index")

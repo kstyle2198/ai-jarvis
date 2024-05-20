@@ -16,7 +16,6 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
 
 
-
 import os
 groq_api_key = os.environ['GROQ_API_KEY']
 
