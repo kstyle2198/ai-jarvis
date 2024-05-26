@@ -8,7 +8,6 @@ from RealtimeSTT import AudioToTextRecorder
 from langchain_community.chat_models import ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.messages import HumanMessage
@@ -16,21 +15,8 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
 
 
-import os
-groq_api_key = os.environ['GROQ_API_KEY']
-
-selected_voice = "David"
+selected_voice = "David"   # David, Hazel
 language = "en"
-
-custom_template = '''
-you are an smart AI assistant in a commercial vessel like LNG Carriers or Container Carriers.
-your answer always starts with "OK, Master".
-generate compact and summarized answer to {query} kindly and shortly.
-if there are not enough information to generate answers, just return "Please give me more information"
-if the query does not give you enough information, return a question for additional information.
-for example, 'could you give me more detailed informations about it?'
-'''
-
 
 
 def say_hello():
@@ -68,48 +54,34 @@ async def jarvis_tts(input_txt, language=language):
     await asyncio.to_thread(tts.feed, dummy_generator(input_txt))
     await asyncio.to_thread(tts.play, language=language)
 
-async def jarvis_chat(llm_name, input_voice):
-    global custom_template
+
+from functools import partial
+def create_prompt(template, **kwargs):
+    return template.format(**kwargs)
+
+async def jarvis_chat(custom_template, llm_name, input_voice):
+
+    template = custom_template
+    create_greeting_prompt = partial(create_prompt, template)
+    prompt = create_greeting_prompt(query=input_voice)
+
     llm = ChatOllama(model=llm_name)
-    prompt = ChatPromptTemplate.from_template(custom_template)
+    prompt = ChatPromptTemplate.from_template(prompt) #(custom_template)
     query = {"query": input_voice}
     chain = prompt | llm | StrOutputParser()
     
-    # Assuming invoke is a blocking operation, use asyncio.to_thread
     sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
 
 
-async def jarvis_groq_llama3_8b(input_voice):
-    global custom_template
-    llm = ChatGroq(groq_api_key=groq_api_key, model_name='llama3-8b-8192')
-    prompt = ChatPromptTemplate.from_template(custom_template)
-    query = {"query": input_voice}
-    chain = prompt | llm | StrOutputParser()
-
-    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
-    sentence = await asyncio.to_thread(chain.invoke, query)
-    return sentence
-
-
-
-async def jarvis_rag(model_name, query):
+async def jarvis_rag(custom_template, model_name, query):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function=embed_model)
+    vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
-
-    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
     docs = await asyncio.to_thread(retriever.invoke, query)
 
     llm = ChatOllama(model=model_name)
-    SYSTEM_TEMPLATE = """
-                    Answer the user's questions based on the below context. 
-                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
-
-                    <context>
-                    {context}
-                    </context>
-                    """
+    SYSTEM_TEMPLATE = custom_template
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
                     SYSTEM_TEMPLATE,),
@@ -117,43 +89,6 @@ async def jarvis_rag(model_name, query):
                     ])
     document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
 
-    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
-    result = await asyncio.to_thread(
-        document_chain.invoke,
-        {
-            "context": docs,
-            "messages": [
-                HumanMessage(content=query)
-            ],
-        }
-    )
-    return docs, result
-
-async def jarvis_rag_groq_llama3(query):
-    embed_model = OllamaEmbeddings(model="nomic-embed-text")
-    vectordb = Chroma(persist_directory="test_index", embedding_function=embed_model)
-    retriever = vectordb.as_retriever(search_kwargs={"k": 3})
-
-    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
-    docs = await asyncio.to_thread(retriever.invoke, query)
-
-    llm = ChatGroq(groq_api_key=groq_api_key, model_name='llama3-8b-8192')
-    SYSTEM_TEMPLATE = """
-                    Answer the user's questions based on the below context. 
-                    If the context doesn't contain any relevant information to the question, don't make something up and just say "I don't know":
-
-                    <context>
-                    {context}
-                    </context>
-                    """
-    question_answering_prompt = ChatPromptTemplate.from_messages(
-                [("system",
-                    SYSTEM_TEMPLATE,),
-                    MessagesPlaceholder(variable_name="messages"),
-                    ])
-    document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-
-    # Assuming invoke method is blocking, use asyncio.to_thread to run it in a separate thread
     result = await asyncio.to_thread(
         document_chain.invoke,
         {
@@ -188,11 +123,10 @@ import asyncio
 app = FastAPI()
 
 class OllamaRequest(BaseModel):
+    template: str
     llm_name: str
     input_voice: str
 
-class GroqRequest(BaseModel):
-    input_voice: str
 
 class TTSRequest(BaseModel):
     output: str
@@ -221,33 +155,17 @@ async def jarvis_trans_main(request: TRANSRequest):
 
 @app.post("/call_jarvis")
 async def call_jarvis_chat(request: OllamaRequest):
-    res = await jarvis_chat(request.llm_name, request.input_voice)
-    result = {"output": res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-@app.post("/call_groq_llama3")
-async def call_groq_llama3_8b(request: GroqRequest):
-    res = await jarvis_groq_llama3_8b(request.input_voice)
+    res = await jarvis_chat(request.template, request.llm_name, request.input_voice)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
 @app.post("/call_rag_jarvis")
 async def call_jarvis_rag(request: OllamaRequest):
-    res = await jarvis_rag(request.llm_name, request.input_voice)
+    res = await jarvis_rag(request.template, request.llm_name, request.input_voice)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
-
-@app.post("/call_rag_groq_llama3")
-async def call_rag_groq_llama3(request: GroqRequest):
-    res = await jarvis_rag_groq_llama3(request.input_voice)
-    result = {"output": res}
-    json_str = json.dumps(result, indent=4, default=str)
-    return Response(content=json_str, media_type='application/json')
-
-
 
 
 if __name__ == '__main__':

@@ -19,24 +19,20 @@ class ChromaViewer():
     def view_collections(db_path):
         client = chromadb.PersistentClient(path=db_path)
 
-        # This might take a while in the first execution if Chroma wants to download
-        # the embedding transformer
-        # print(client.list_collections())
-
         st.subheader("ChromaDB Collections")
-
         for collection in client.list_collections():
-            data = collection.get()
-            data
+            data = collection.get(include=['embeddings', 'documents', 'metadatas'])
 
-            ids = data['ids']
-            embeddings = data["embeddings"]
-            metadata = data["metadatas"]
-            documents = data["documents"]
+            # ids = data['ids']
+            # embeddings = data["embeddings"]
+            # metadata = data["metadatas"]
+            # documents = data["documents"]
 
             df = pd.DataFrame.from_dict(data)
             st.markdown(f"{df.shape}")
             st.dataframe(df)
+
+    
 
 if __name__ == "__main__":
     try:
