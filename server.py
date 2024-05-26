@@ -3,7 +3,7 @@ import uvicorn
 import os
 import json
 
-from RealtimeTTS import TextToAudioStream, SystemEngine, CoquiEngine
+from RealtimeTTS import TextToAudioStream, SystemEngine
 from RealtimeSTT import AudioToTextRecorder
 from langchain_community.chat_models import ChatOllama
 from langchain_core.output_parsers import StrOutputParser
