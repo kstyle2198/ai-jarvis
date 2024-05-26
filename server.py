@@ -27,6 +27,7 @@ def recording_finished():
 
 
 async def jarvis_stt():
+    global language
     with AudioToTextRecorder(spinner=False, 
                             model="small",   #'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1', 'large-v2'.
                             language=language, 

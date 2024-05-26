@@ -4,6 +4,8 @@ import streamlit as st
 from datetime import datetime
 import time
 from utils import CustomPDFLoader, ShowPdf, ChromaViewer
+import pandas as pd
+import json
 
 # st.set_page_config(
 #         page_title="AI Jarvis",
@@ -95,10 +97,12 @@ async def call_jarvis(custom_template, llm_name, input_voice):
 async def chat_main(custome_template):
 
     with st.container():
-        llm1 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsfv", help="Internet is not needed")
+        llm1 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "Gemma(2B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsfv", help="Internet is not needed")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
         if llm1 == "tinydolphin(1.1B)":
             llm_name = "tinydolphin:latest"
+        elif llm1 == "Gemma(2B)":
+            llm_name = "gemma:2b"
         elif llm1 == "dolphin-phi(2.7B)":
             llm_name = "dolphin-phi:latest"
         elif llm1 == "phi3(3.8B)":
@@ -187,10 +191,10 @@ custom_loader = CustomPDFLoader()
 
 
 
-def create_vectordb(parsed_text):  # VectorDB생성 및 저장
+def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorDB생성 및 저장
     with st.spinner("Processing..."):
         if st.button("Create Vectorstore", help="You can add your PDFs in the VectorStore After Parsing"):
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
             splitted_texts = text_splitter.split_documents(parsed_text)
             embed_model = OllamaEmbeddings(model="nomic-embed-text")
             db=Chroma.from_documents(splitted_texts, embedding=embed_model, persist_directory="vector_index")
@@ -228,11 +232,13 @@ async def call_rag(custome_template, llm_name, query):
     
 async def rag_main(custome_template):
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsssv", help="Internet is not needed")
+        llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "Gemma(2B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsssv", help="Internet is not needed")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     with st.container():
         if llm2 == "tinydolphin(1.1B)":
             llm_name = "tinydolphin:latest"
+        elif llm2 == "Gemma(2B)":
+            llm_name = "gemma:2b"
         elif llm2 == "dolphin-phi(2.7B)":
             llm_name = "dolphin-phi:latest"
         elif llm2 == "phi3(3.8B)":
@@ -315,17 +321,17 @@ if there are not enough information to generate answers, just return "Please giv
 if the query does not give you enough information, return a question for additional information.
 for example, 'could you give me more detailed informations about it?'
 ''',
-
 "English_Teacher": '''you are an smart AI English teacher to teach expresssions about daily life.
 your answer always starts with "Ok, let's get started".
-generate correponding compact and short answer to {query}, like friends in a school.
+generate a compact and short answer correponding to {query}, like conversations between friends in a school.
 if there are not some syntex errors in query, generated the corrected expression in kind manner.
-'''
-}
+''',
+"Movie_Teller": "Not prepared yet",
+"Food_Teller": "Not prepared yet"}
 
 
 rag_sys_templates = {
-'Common_Engineer' :"""You are a smart AI engineering advisor in Commercial Vessel like LNG Carrier or Container Carrier.
+'Common_Engineer' :"""You are a smart AI engineering advisor in Commercial Vessel like LNG Carrier.
 Generate compact and summarized answer based on the {context} using numbering.
 If the context doesn't contain any relevant information to the question, don't make something up and just say 'I don't know':
 """,
@@ -337,7 +343,9 @@ If the context doesn't contain any relevant information to the question, don't m
 
 }
 
-
+def json_to_columns(json_str):
+    json_dict = json.loads(json_str)
+    return pd.Series(json_dict)
 
 
 if __name__ == "__main__":
@@ -349,7 +357,7 @@ if __name__ == "__main__":
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore (embedding your PDFs)
                     - In the Dev mode,Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
-    tab1, tab2, tab3 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **ChromaDB**"])
+    tab1, tab2, tab3 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**"])
     with tab1:
         with st.expander("✔️ Select Template Concept", expanded=False):
             sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "English_Teacher", "Movie_Teller", "Food_Teller"])
@@ -357,7 +365,7 @@ if __name__ == "__main__":
 
         asyncio.run(chat_main(custome_template))
     with tab2:
-        with st.expander("📑 File Uploader"):
+        with st.expander("🧩 Custom Parsing & VectorStore(DB)"):
             uploaded_file = st.file_uploader("📎Upload your file")
             if uploaded_file:
                 temp_dir = base_dir   # tempfile.mkdtemp()  --->  import tempfile 필요, 임시저장디렉토리 자동지정함
@@ -371,24 +379,29 @@ if __name__ == "__main__":
             else:
                 st.empty()
 
-        with st.expander("🧩 Custom Parsing"):
             try:
                 file_list2 = list_selected_files(base_dir, "pdf")
-                sel21 = st.selectbox("📌 Select your File", file_list2, index=None, placeholder="Select your file to parse", help="Table to Markdown and Up/Down Cropping")
+                sel21 = st.selectbox("📌 Select the Parsing File", file_list2, index=None, placeholder="Select your file to parse", help="Table to Markdown and Up/Down Cropping")
                 st.session_state.path = os.path.join(base_dir, sel21)
                 st.session_state.path
-                crop_check = st.checkbox("Crop", value=True)
+
+                col31, col32, col33 = st.columns(3)
+                with col31: crop_check = st.checkbox("✂️ Crop", value=True)
+                with col32: chunk_size = st.slider("📏 Chunk_Size", min_value=1000, max_value=3000, step=100)
+                with col33: chunk_overlap = st.slider("⚗️ Chunk_Overlap", min_value=200, max_value=1000, step=50)
+                
                 with st.spinner("processing.."):
                     if st.button("Parsing"):
                         st.session_state.pages = ""
                         st.session_state.pages = custom_loader.lazy_load(st.session_state.path, crop_check)
                 st.session_state.pages
+                if st.session_state.pages:
+                    create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)
             except:
                 pass
-        with st.expander("🗂️ VectorStore(DB)"):
-            create_vectordb(st.session_state.pages)
+            
 
-        with st.expander("🔎 Retrieval Test"):
+        with st.expander("🔎 Retrieval Test (Similarity Search)"):
             embed_model = OllamaEmbeddings(model="nomic-embed-text")
             vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
             retriever = vectordb.as_retriever(search_kwargs={"k": 3})
@@ -409,6 +422,20 @@ if __name__ == "__main__":
             st.empty()
 
     with tab3:
-        cv.view_collections("vector_index")
+        df = cv.view_collections("vector_index")
+        df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
+        doc_list = df["title"].unique().tolist()
+        doc_list = sorted(doc_list)
+        
+        with st.expander("📋 Document List"):
+            for doc in doc_list:
+                st.markdown(f"- {doc}")
+
+        st.markdown(f"**Dataframe Shape: {df.shape}**")
+        st.dataframe(df, use_container_width=True)
+
+        
+
+
 
      
