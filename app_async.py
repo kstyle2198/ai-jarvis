@@ -185,11 +185,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
-
-show_pdf = ShowPdf()
+# show_pdf = ShowPdf()
 custom_loader = CustomPDFLoader()
-
-
 
 def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorDB생성 및 저장
     with st.spinner("Processing..."):
@@ -204,22 +201,20 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 
 #### RAG 함수 #################################################    
 
-async def api_ollama(url, custome_template, llm_name, input_voice):
+async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
 
    
-
-async def call_rag(custome_template, llm_name, query):
+async def call_rag(custome_template, llm_name, query, temp, top_k, top_p):
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis"
-        res = await api_ollama(url, custome_template, llm_name, query)
-        
+        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p)
         retrival_output = res["output"][0]
         output = res["output"][1]
         trans_res = await trans(output)
@@ -228,12 +223,22 @@ async def call_rag(custome_template, llm_name, query):
         return retrival_output, output, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
-
-    
+  
 async def rag_main(custome_template):
+
+    col911, col922, col933 = st.columns(3)
+    with col911: 
+        temp = st.slider("🌡️ :blue[Temperature(Default:0)]", min_value=0.0, max_value=2.0)
+    with col922: 
+        top_k = st.slider("🎲 :blue[Probability of Nonsense(Default:0)]", min_value=0, max_value=100)
+    with col933: 
+        top_p = st.slider("📝 :blue[More Diverse Text(Default:0)]", min_value=0.0, max_value=1.0)
+
     with st.container():
         llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "Gemma(2B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsssv", help="Internet is not needed")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
+    
+
     with st.container():
         if llm2 == "tinydolphin(1.1B)":
             llm_name = "tinydolphin:latest"
@@ -259,7 +264,7 @@ async def rag_main(custome_template):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query)
+                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -283,7 +288,7 @@ async def rag_main(custome_template):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query)
+            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -353,17 +358,17 @@ if __name__ == "__main__":
     with st.expander("🚢 Note"):
         st.markdown("""
                     - This AI app is created for :green[**Local Chatbot and RAG Service without Internet**].
-                    - :orange[**Chatbot**] is for Common Conversations regarding any interests like food, movie, etc.
+                    - :orange[**Chatbot**] is for Common Conversations regarding any interests like techs, skills, movies, etc.
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore (embedding your PDFs)
                     - In the Dev mode,Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
     tab1, tab2, tab3 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**"])
     with tab1:
-        with st.expander("✔️ Select Template Concept", expanded=False):
+        with st.expander("✔️ Select Prompt Concept", expanded=False):
             sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "English_Teacher", "Movie_Teller", "Food_Teller"])
             custome_template = st.text_area("Template", custome_templates[sel_template], height=200)
-
         asyncio.run(chat_main(custome_template))
+
     with tab2:
         with st.expander("🧩 Custom Parsing & VectorStore(DB)"):
             uploaded_file = st.file_uploader("📎Upload your file")
@@ -411,10 +416,9 @@ if __name__ == "__main__":
                     st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
             st.session_state.retrievals
 
-        with st.expander("✔️ Select Template Concept", expanded=False):
+        with st.expander("✔️ Select Prompt Concept", expanded=False):
             sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Navigation_Engineer", "Electrical_Engineer"])
             custome_template = st.text_area("Template", rag_sys_templates[sel_template], height=200)
-
 
         try:
             asyncio.run(rag_main(custome_template))

@@ -75,13 +75,13 @@ async def jarvis_chat(custom_template, llm_name, input_voice):
     return sentence
 
 
-async def jarvis_rag(custom_template, model_name, query):
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
     docs = await asyncio.to_thread(retriever.invoke, query)
 
-    llm = ChatOllama(model=model_name)
+    llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     SYSTEM_TEMPLATE = custom_template
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
@@ -116,18 +116,29 @@ async def trans_main(txt):
     return translations
 
 ##########################################################################################################################################
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Response
 import json
 from pydantic import BaseModel
 import asyncio
 
-app = FastAPI()
+app = FastAPI(
+    title="AI-Jarvis",
+    description="Local RAG Chatbot without Internet",
+    version="0.0"
+    )
 
 class OllamaRequest(BaseModel):
     template: str
     llm_name: str
     input_voice: str
 
+class RagOllamaRequest(BaseModel):
+    template: str
+    llm_name: str
+    input_voice: str
+    temperature: float
+    top_k: int
+    top_p: float
 
 class TTSRequest(BaseModel):
     output: str
@@ -162,8 +173,8 @@ async def call_jarvis_chat(request: OllamaRequest):
     return Response(content=json_str, media_type='application/json')
 
 @app.post("/call_rag_jarvis")
-async def call_jarvis_rag(request: OllamaRequest):
-    res = await jarvis_rag(request.template, request.llm_name, request.input_voice)
+async def call_jarvis_rag(request: RagOllamaRequest):
+    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
