@@ -221,7 +221,6 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p):
         output = res["output"][1]
         trans_res = await trans(output)
         trans_output = trans_res['output'][0]
-        
         return retrival_output, output, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
@@ -240,7 +239,6 @@ async def rag_main(custome_template):
         llm2 = st.radio("🐬 **Select LLM**", options=["tinydolphin(1.1B)", "Gemma(2B)", "dolphin-phi(2.7B)", "phi3(3.8B)", "llama3(8B)"], index=1, key="dsssv", help="Internet is not needed")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
-
     with st.container():
         if llm2 == "tinydolphin(1.1B)":
             llm_name = "tinydolphin:latest"
@@ -256,7 +254,7 @@ async def rag_main(custome_template):
             pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
-    rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis' after 2~3 seconds. Jarvis will replay 'Yes, Master' and then Speak your Requests")
+    rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis'. Jarvis will replay 'Yes, Master' and then Speak your Requests")
 
     with st.spinner("Processing"):
         if  rag_btn and text_input == "":
@@ -348,6 +346,7 @@ async def call_rag_with_history(llm_name, query, temp, top_k, top_p, history_key
         return f"Error: {str(e)}"
     
 async def rag_main_history():
+    global store
     col9111, col9222, col9333 = st.columns(3)
     with col9111: 
         temp = st.slider("🌡️ :blue[Temperature(Default:0)]", min_value=0.0, max_value=2.0, key="wedsf")
@@ -375,8 +374,17 @@ async def rag_main_history():
             pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dlsdfg")
-    history_key = st.number_input("🔑 history_key", min_value=1, step=1, key="wqeqq", help="History를 기억하는 구분 id (같은 id 범위내 대화 이력 기억)")
-    rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis' after 2~3 seconds. Jarvis will replay 'Yes, Master' and then Speak your Requests", key="wqwe")
+    
+    col31, col32, col33 = st.columns(3)
+    with col31:
+        rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis'. Jarvis will replay 'Yes, Master' and then Speak your Requests", key="wqwe")
+    with col32:
+        history_init = st.button("🗑️ Init History", help="대화 History 삭제(초기화)")
+    with col33:
+        history_key = st.number_input("🔑 history_key", min_value=1, step=1, key="wqeqq", help="History를 기억하는 구분 id (같은 id 범위내 대화 이력 기억)")
+
+    if history_init:
+        store ={}
 
     with st.spinner("Processing"):
         if  rag_btn and text_input == "":
@@ -556,8 +564,6 @@ if __name__ == "__main__":
 
         try:
             store = {}
-            if st.button("History초기화"):
-                store = {}
             asyncio.run(rag_main_history())
         except:
             st.empty()
