@@ -13,6 +13,12 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.messages import HumanMessage
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.chat_history import BaseChatMessageHistory
+
 
 
 selected_voice = "David"   # David, Hazel
@@ -60,32 +66,33 @@ from functools import partial
 def create_prompt(template, **kwargs):
     return template.format(**kwargs)
 
-async def jarvis_chat(custom_template, llm_name, input_voice):
-
-    template = custom_template
+async def jarvis_chat(template, llm_name, input_voice):
     create_greeting_prompt = partial(create_prompt, template)
     prompt = create_greeting_prompt(query=input_voice)
-
     llm = ChatOllama(model=llm_name)
-    prompt = ChatPromptTemplate.from_template(prompt) #(custom_template)
+    prompt = ChatPromptTemplate.from_template(prompt)
     query = {"query": input_voice}
     chain = prompt | llm | StrOutputParser()
-    
     sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
+
 
 
 async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+    retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
+    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
+    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords":"FWG"}}) 
+    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
+
     docs = await asyncio.to_thread(retriever.invoke, query)
 
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
-    SYSTEM_TEMPLATE = custom_template
+    # SYSTEM_TEMPLATE = custom_template
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
-                    SYSTEM_TEMPLATE,),
+                    custom_template,),
                     MessagesPlaceholder(variable_name="messages"),
                     ])
     document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
@@ -100,6 +107,79 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         }
     )
     return docs, result
+
+
+store = {}
+def jarvis_rag_with_history(model_name, query, temperature, top_k, top_p, history_key):
+    global store
+    embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
+    vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
+    retriever = vectorstore.as_retriever() 
+
+    ### Contextualize question ###
+    contextualize_q_system_prompt = """Given a chat history and the latest user question \
+    which might reference context in the chat history, formulate a standalone question \
+    which can be understood without the chat history. Do NOT answer the question, \
+    just reformulate it if needed and otherwise return it as is."""
+    contextualize_q_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+        )
+    history_aware_retriever = create_history_aware_retriever(
+        llm, retriever, contextualize_q_prompt
+        )
+
+    ### Answer question ###
+    qa_system_prompt = """You are an assistant for question-answering tasks. \
+    Use the following pieces of retrieved context to answer the question. \
+    If you don't know the answer, just say that you don't know. \
+    Use three sentences maximum and keep the answer concise.\
+
+    {context}"""
+    qa_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", qa_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+        )
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+
+    ### Statefully manage chat history ###
+    
+    def get_session_history(session_id: str) -> BaseChatMessageHistory:
+        if session_id not in store:
+            store[session_id] = ChatMessageHistory()
+        return store[session_id]
+
+    conversational_rag_chain = RunnableWithMessageHistory(
+        rag_chain,
+        get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+        output_messages_key="answer",)
+
+    result = conversational_rag_chain.invoke(
+        {"input": query},
+        config={
+            "configurable": {"session_id": history_key}
+            },  
+            )
+    
+    result["chat_history"] = store[history_key]
+
+    return result, store
+
+async def async_jarvis_rag_with_history(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, jarvis_rag_with_history, *args, **kwargs)
+
 
 import asyncio
 from aiogoogletrans import Translator
@@ -140,6 +220,14 @@ class RagOllamaRequest(BaseModel):
     top_k: int
     top_p: float
 
+class RagOllamaRequestHistory(BaseModel):
+    llm_name: str
+    input_voice: str
+    temperature: float
+    top_k: int
+    top_p: float
+    history_key: int
+
 class TTSRequest(BaseModel):
     output: str
 
@@ -179,6 +267,15 @@ async def call_jarvis_rag(request: RagOllamaRequest):
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
+
+@app.post("/call_rag_jarvis_with_history")
+async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
+    # res = await jarvis_rag_with_history(request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
+    res = await async_jarvis_rag_with_history(request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
+
+    result = {"output": res}
+    json_str = json.dumps(result, indent=4, default=str)
+    return Response(content=json_str, media_type='application/json')
 
 if __name__ == '__main__':
     uvicorn.run(app, host='localhost', port=8000)
