@@ -89,7 +89,6 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
     docs = await asyncio.to_thread(retriever.invoke, query)
 
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
-    # SYSTEM_TEMPLATE = custom_template
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
                     custom_template,),
@@ -110,7 +109,7 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
 
 
 store = {}
-def jarvis_rag_with_history(model_name, query, temperature, top_k, top_p, history_key):
+def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key):
     global store
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
@@ -134,15 +133,15 @@ def jarvis_rag_with_history(model_name, query, temperature, top_k, top_p, histor
         )
 
     ### Answer question ###
-    qa_system_prompt = """You are an assistant for question-answering tasks. \
-    Use the following pieces of retrieved context to answer the question. \
-    If you don't know the answer, just say that you don't know. \
-    Use three sentences maximum and keep the answer concise.\
+    # qa_system_prompt = """You are an assistant for question-answering tasks. \
+    # Use the following pieces of retrieved context to answer the question. \
+    # If you don't know the answer, just say that you don't know. \
+    # Use three sentences maximum and keep the answer concise.\
 
-    {context}"""
+    # {context}"""
     qa_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", qa_system_prompt),
+            ("system", custom_template),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ]
@@ -221,6 +220,7 @@ class RagOllamaRequest(BaseModel):
     top_p: float
 
 class RagOllamaRequestHistory(BaseModel):
+    template: str
     llm_name: str
     input_voice: str
     temperature: float
@@ -267,12 +267,9 @@ async def call_jarvis_rag(request: RagOllamaRequest):
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
-
 @app.post("/call_rag_jarvis_with_history")
 async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
-    # res = await jarvis_rag_with_history(request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
-    res = await async_jarvis_rag_with_history(request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
-
+    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')

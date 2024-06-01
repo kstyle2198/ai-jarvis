@@ -1,10 +1,5 @@
 import streamlit as st
 import os
-# from langchain_community.document_loaders import TextLoader
-# from langchain_community.document_loaders import UnstructuredMarkdownLoader
-# from langchain_community.document_loaders.csv_loader import CSVLoader
-# from langchain_community.document_loaders import PyPDFLoader
-# from langchain_community.document_loaders import PyMuPDFLoader
 
 import base64
 from pathlib import Path
@@ -23,37 +18,6 @@ class FileManager():
         file_list = os.listdir(path)
         selected_files = [file for file in file_list]
         return selected_files
-
-
-# class Parsing():
-#     def __init__(self):
-#         pass
-
-#     def load_TextLoader(self, path):
-#         loader = TextLoader(path)
-#         data = loader.load()
-#         return data
-    
-#     def load_UnstructuredMarkdownLoader(self, path):
-#         loader = UnstructuredMarkdownLoader(path, mode='elements') # elements or single
-#         data = loader.load()
-#         return data
-    
-#     def load_CSVLoader(self, path):
-#         loader = CSVLoader(file_path=path)
-#         data = loader.load()
-#         return data
-    
-#     def load_PyPDFLoader(self, path):
-#         loader = PyPDFLoader(path)
-#         pages = loader.load()
-#         return pages
-    
-#     def load_PyMuPDFLoader(self, path):   
-#         loader = PyMuPDFLoader(path)
-#         data = loader.load()
-#         return data
-    
 
 class ShowPdf():
     def __init__(self):
@@ -129,27 +93,49 @@ def table_parser(pdf_path, page_num, crop):
         full_result.append(table_string)
         return table_string
 
-# def image_extractor(pdf_path, page_num, prefix):
-#     doc = PdfDocument()
-#     doc.LoadFromFile(pdf_path)
-#     page = doc.Pages[page_num]
-#     images = []
-#     for image in page.ExtractImages():
-#         images.append(image)
-#     index = 0
+import fitz
+import os
+from PIL import Image
 
-#     directory = f"./images/{prefix}"
-#     Path(directory).mkdir(parents=True, exist_ok=True)
 
-#     image_filenames = []
-#     for image in images:
-#         imageFileName = f'{prefix}_{page_num}_{index}.png'
-#         imageSaveName = f'./images/{prefix}/{page_num}_{index}.png'
-#         image_filenames.append(imageFileName)
-#         index += 1
-#         image.Save(imageSaveName, ImageFormat.get_Png())
-#     doc.Close()
-#     return image_filenames
+def image_extractor(file_path, page_num, prefix):
+    #Define path for saved images
+    images_path = f"./images/{prefix}/"
+    Path(images_path).mkdir(parents=True, exist_ok=True)
+    #Open PDF file
+    pdf_file = fitz.open(file_path)
+    #Create empty list to store images information
+    #Get the number of pages in PDF file
+    # page_nums = len(pdf_file)
+    images_list = []
+    #Extract all images information from each page
+
+    # for page_num in range(page_nums):
+    page_content = pdf_file[page_num]
+    images_list.extend(page_content.get_images())
+
+    #Raise error if PDF has no images
+    if len(images_list)!=0:
+        # raise ValueError(f'No images found in {file_path}')
+    #Save all the extracted images
+        for i, img in enumerate(images_list, start=1):
+            #Extract the image object number
+            xref = img[0]
+            #Extract image
+            base_image = pdf_file.extract_image(xref)
+            #Store image bytes
+            image_bytes = base_image['image']
+            #Store image extension
+            image_ext = base_image['ext']
+            #Generate image file name
+            image_name = str(page_num)+'_'+ str(i) + '.' + image_ext
+            #Save image
+            with open(os.path.join(images_path, image_name) , 'wb') as image_file:
+                image_file.write(image_bytes)
+                image_file.close()
+    else:
+        pass
+
 
 def flags_decomposer(flags):
         """Make font flags human readable."""
@@ -170,28 +156,6 @@ def flags_decomposer(flags):
             l.append("bold")
         return ", ".join(l)
 
-# def extract_colored_font(doc, page_num):
-#     results = []
-    # for page in doc:
-    # read page text as a dictionary, suppressing extra spaces in CJK fonts
-    # blocks = doc[page_num].get_text("dict", flags=11)["blocks"]
-    # for b in blocks:  # iterate through the text blocks
-    #     for l in b["lines"]:  # iterate through the text lines
-    #         for s in l["spans"]:  # iterate through the text spans
-    #             font_properties = "Font: '%s' (%s), size %g, color #%06x" % (
-    #                 s["font"],  # font name
-    #                 flags_decomposer(s["flags"]),  # readable font flags
-    #                 s["size"],  # font size
-    #                 s["color"],  # font color
-    #             )
-    #             if s["color"] != 0:
-    #                 results.append(s["text"])
-                    # st.markdown(f"Text: {s['text']}, color: {s['color']}")  # simple print of text
-                    # st.markdown(font_properties)
-    # return results
-
-
-
 class CustomPDFLoader(BaseLoader):
     def __init__(self) -> None:
         pass
@@ -199,13 +163,14 @@ class CustomPDFLoader(BaseLoader):
     def lazy_load(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
         full_result = []
         prefix = file_path.split("\\")[-1].split(".")[0].strip()
+        print(prefix)
         with pdfplumber.open(file_path) as pdf1:
             page_number = 0
             docs_for_color = fitz.open(file_path)
             for _ in pdf1.pages:
                 page_result = block_based_parsing_by_page(file_path, page_number, crop)
                 table_result = table_parser(file_path, page_number, crop)
-                # image_files = image_extractor(file_path, page_number, prefix)
+                image_files = image_extractor(file_path, page_number, prefix)
 
                 if table_result:
                     total_pag_result = page_result + "\n\n" + table_result
@@ -225,6 +190,12 @@ class CustomPDFLoader(BaseLoader):
         return full_result
 
     
+
+if __name__ == "__main__":
+
+    path = "D:/ai_jarvis/data/FWG.pdf"
+    image_extractor(path, 1, "test")
+    pass
 
 
 
