@@ -3,17 +3,20 @@ import aiohttp
 import streamlit as st
 from datetime import datetime
 import time
-from utils import CustomPDFLoader, ShowPdf, ChromaViewer
-# import pandas as pd
-# import json
+from utils import CustomPDFLoader, ChromaViewer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from pathlib import Path
 import os
-# import PyPDF2
 
-st.set_page_config(page_title="AI Jarvis")
+if "center" not in st.session_state:
+    layout = "centered"
+else:
+    layout = "wide" if st.session_state.center else "centered"
+st.set_page_config(page_title="AI Jarvis", layout=layout)
+
+
 st.markdown(
             """
         <style>
@@ -200,7 +203,6 @@ if "doc_list" not in st.session_state:
 
 custom_loader = CustomPDFLoader()
 cv = ChromaViewer
-showpdf = ShowPdf()
 
 def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorDB생성 및 저장
     with st.spinner("Processing..."):
@@ -214,19 +216,19 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
             st.info("VectorStore is Updated")
 
 #### RAG 함수 #################################################    
-async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc):
+async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
    
-async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc):
+async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q):
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis"
-        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc)
+        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
         retrival_output = res["output"][0]
         output = res["output"][1]
         trans_res = await trans(output)
@@ -235,7 +237,7 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc):
     except Exception as e:
         return f"Error: {str(e)}"
   
-async def rag_main(custome_template, doc=None):
+async def rag_main(custome_template, doc=None, multi_q=False):
     with st.expander("🧪 Hyper-Parameters"):
         col911, col922, col933 = st.columns(3)
         with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
@@ -263,7 +265,7 @@ async def rag_main(custome_template, doc=None):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc)
+                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -285,7 +287,7 @@ async def rag_main(custome_template, doc=None):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc)
+            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -323,10 +325,11 @@ async def rag_main(custome_template, doc=None):
             imgs = list_selected_files(path, "png")
 
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
-
-        for i in sel2_img:
-            path = base_img_path +str(k) +"/"+str(i)
-            st.image(path, caption=path)
+        image_show_check = st.checkbox("Show Images")
+        if image_show_check:
+            for i in sel2_img:
+                path = base_img_path +str(k) +"/"+str(i)
+                st.image(path, caption=path)
 
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
@@ -459,10 +462,11 @@ async def rag_main_history(custome_template, doc):
             imgs = list_selected_files(path, "png")
 
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
-
-        for i in sel2_img:
-            path = base_img_path +str(k) +"/"+str(i)
-            st.image(path, caption=path)
+        image_show_check = st.checkbox("Show Images")
+        if image_show_check:
+            for i in sel2_img:
+                path = base_img_path +str(k) +"/"+str(i)
+                st.image(path, caption=path)
 
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
@@ -502,16 +506,16 @@ If the context doesn't contain any relevant information to the question, don't m
 
 }
 
-
-
 if __name__ == "__main__":
     st.title("⚓ :blue[AI Jarvis]")
+    st.checkbox("Wide Layout", key="center", value=st.session_state.get("center", False))
+
     with st.expander("🚢 Note"):
         st.markdown("""
-                    - This AI app is created for :green[**Local Chatbot and RAG Service without Internet**].
+                    - This AI app is created for :green[**Local Chatbot and RAG Service using sLLM without Internet**].
                     - :orange[**Chatbot**] is for Common Conversations regarding any interests like techs, movies, etc.
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore (embedding your PDFs)
-                    - In the Dev mode,Translation API needs Internet. (will be excluded in the Production Mode)
+                    - In the Dev mode, Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
     tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
     with tab1:
@@ -521,9 +525,10 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
-        col71, col72 = st.columns(2)
+        col71, col72, col73 = st.columns([4, 3, 3])
         with col71: history_check = st.checkbox("History_Aware_Conversation", help="If you want LLM to remember our conversation history, please check.")
         with col72: sel_doc_check = st.checkbox("Specify Document", help="You can search the specified target document")
+        with col73: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
         if sel_doc_check:
             with st.expander("📚 Specify the Target Document", expanded=True):
                 sel_doc = st.radio("📌 Target Search Document", st.session_state.doc_list)
@@ -540,7 +545,7 @@ if __name__ == "__main__":
                 store = {}
                 asyncio.run(rag_main_history(custome_template, sel_doc))
             else:
-                asyncio.run(rag_main(custome_template, sel_doc))
+                asyncio.run(rag_main(custome_template, sel_doc, multi_check))
         except:
             st.empty()
 

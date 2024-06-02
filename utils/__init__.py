@@ -1,2 +1,2 @@
-from .parsing import FileManager, ShowPdf, CustomPDFLoader
+from .parsing import FileManager, CustomPDFLoader
 from .vectordb import ChromaViewer

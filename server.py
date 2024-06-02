@@ -78,8 +78,12 @@ async def jarvis_chat(template, llm_name, input_voice):
 
 
 
-async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None):
+from langchain.retrievers.multi_query import MultiQueryRetriever
+
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
+    llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
+
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
         retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
@@ -88,9 +92,17 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
+    if multi_q:
+        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm)
+    else:
+        pass
+
+    import logging
+    logging.basicConfig()
+    logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
+
     docs = await asyncio.to_thread(retriever.invoke, query)
 
-    llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
                     custom_template,),
@@ -120,6 +132,8 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         retriever = vectorstore.as_retriever() 
     else:
         retriever = vectorstore.as_retriever(search_kwargs={"filter": {"keywords":doc}}) 
+
+
 
     ### Contextualize question ###
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
@@ -219,6 +233,7 @@ class RagOllamaRequest(BaseModel):
     top_k: int
     top_p: float
     doc: Optional[str]
+    multi_q: bool
 
 class RagOllamaRequestHistory(BaseModel):
     template: str
@@ -264,7 +279,7 @@ async def call_jarvis_chat(request: OllamaRequest):
 
 @app.post("/call_rag_jarvis")
 async def call_jarvis_rag(request: RagOllamaRequest):
-    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc)
+    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')

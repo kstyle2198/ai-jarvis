@@ -1,7 +1,5 @@
 import streamlit as st
 import os
-
-import base64
 from pathlib import Path
 
 @st.experimental_fragment
@@ -18,19 +16,6 @@ class FileManager():
         file_list = os.listdir(path)
         selected_files = [file for file in file_list]
         return selected_files
-
-class ShowPdf():
-    def __init__(self):
-        pass
-
-    def show_pdf(self, path):
-        pdf_path1 = Path(path)
-        base64_pdf = base64.b64encode(pdf_path1.read_bytes()).decode("utf-8")
-        pdf_display = f"""
-            <iframe src="data:application/pdf;base64,{base64_pdf}" width="800px" height=1000" type="application/pdf"></iframe>
-        """
-        st.markdown(pdf_display, unsafe_allow_html=True)
-
 
 import pdfplumber
 from spire.pdf.common import *
@@ -95,29 +80,16 @@ def table_parser(pdf_path, page_num, crop):
 
 import fitz
 import os
-from PIL import Image
-
 
 def image_extractor(file_path, page_num, prefix):
-    #Define path for saved images
     images_path = f"./images/{prefix}/"
     Path(images_path).mkdir(parents=True, exist_ok=True)
-    #Open PDF file
     pdf_file = fitz.open(file_path)
-    #Create empty list to store images information
-    #Get the number of pages in PDF file
-    # page_nums = len(pdf_file)
     images_list = []
-    #Extract all images information from each page
-
-    # for page_num in range(page_nums):
     page_content = pdf_file[page_num]
     images_list.extend(page_content.get_images())
 
-    #Raise error if PDF has no images
     if len(images_list)!=0:
-        # raise ValueError(f'No images found in {file_path}')
-    #Save all the extracted images
         for i, img in enumerate(images_list, start=1):
             #Extract the image object number
             xref = img[0]
@@ -135,26 +107,6 @@ def image_extractor(file_path, page_num, prefix):
                 image_file.close()
     else:
         pass
-
-
-def flags_decomposer(flags):
-        """Make font flags human readable."""
-        l = []
-        if flags & 2 ** 0:
-            l.append("superscript")
-        if flags & 2 ** 1:
-            l.append("italic")
-        if flags & 2 ** 2:
-            l.append("serifed")
-        else:
-            l.append("sans")
-        if flags & 2 ** 3:
-            l.append("monospaced")
-        else:
-            l.append("proportional")
-        if flags & 2 ** 4:
-            l.append("bold")
-        return ", ".join(l)
 
 class CustomPDFLoader(BaseLoader):
     def __init__(self) -> None:
@@ -185,7 +137,6 @@ class CustomPDFLoader(BaseLoader):
                     )
                 full_result.append(result)
                 page_number += 1
-
 
         return full_result
 
