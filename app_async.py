@@ -238,9 +238,9 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc):
 async def rag_main(custome_template, doc=None):
     with st.expander("🧪 Hyper-Parameters"):
         col911, col922, col933 = st.columns(3)
-        with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0)
-        with col922: top_k = st.slider("🎲 :blue[Probability of Nonsense]", min_value=0, max_value=100)
-        with col933: top_p = st.slider("📝 :blue[More Diverse Text]", min_value=0.0, max_value=1.0)
+        with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
+        with col922: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
+        with col933: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.(Original Default: 0.9)")
 
     with st.container():
         llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssv", help="Bigger LLM returns better answers but takes more time")
@@ -363,9 +363,9 @@ async def rag_main_history(custome_template, doc):
     global store
     with st.expander("🧪 Hyper-Parameters"):
         col9111, col9222, col9333 = st.columns(3)
-        with col9111: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, key="wedsf")
-        with col9222: top_k = st.slider("🎲 :blue[Probability of Nonsense]", min_value=0, max_value=100, key="xvvd")
-        with col9333: top_p = st.slider("📝 :blue[More Diverse Text]", min_value=0.0, max_value=1.0, key="qwer")
+        with col9111: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, key="wedsf", help="The temperature of the model. Increasing the temperature will make the model answer more creatively.(Original Default: 0.8)")
+        with col9222: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, key="xvvd", help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
+        with col9333: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, key="qwer", help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. (Original Default: 0.9)")
 
     with st.container():
         llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
@@ -490,17 +490,18 @@ if there are not some syntex errors in query, generated the corrected expression
 rag_sys_templates = {
 'Common_Engineer' :"""You are a smart AI engineering advisor in Commercial Vessel like LNG Carrier.
 Generate compact and summarized answer based on the {context} using numbering.
-Use five sentences maximum and keep the answer concise.
+Use ten sentences maximum and keep the answer concise.
 If the context or metadata doesn't contain any relevant information to the question, don't make something up and just say 'I don't know':
 """,
 'Navigation_Engineer':"""You are a smart AI specialist of Integrated Smartship Solution(ISS).
 Generate compact and summarized answer based on the {context} using numbering.
-Use five sentences maximum and keep the answer concise.
+Use ten sentences maximum and keep the answer concise.
 If the context doesn't contain any relevant information to the question, don't make something up and just say 'I don't know':
 """,
 'Electrical_Engineer': "Not prepared yet",
 
 }
+
 
 
 if __name__ == "__main__":
