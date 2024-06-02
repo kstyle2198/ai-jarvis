@@ -13,7 +13,7 @@ from pathlib import Path
 import os
 # import PyPDF2
 
-st.set_page_config(page_title="AI Jarvis",)
+st.set_page_config(page_title="AI Jarvis")
 st.markdown(
             """
         <style>
@@ -30,9 +30,9 @@ parent_dir = Path(__file__).parent
 base_dir = str(parent_dir) + "\data"  
 
 def list_selected_files(path, 확장자):
-        file_list = os.listdir(path)
-        selected_files = [file for file in file_list if file.endswith(확장자)]
-        return selected_files
+    file_list = os.listdir(path)
+    selected_files = [file for file in file_list if file.endswith(확장자)]
+    return selected_files
 
 #### 공통함수 ############
 def stream_data(output):
@@ -72,6 +72,28 @@ async def trans(txt):
     except Exception as e:
         return f"Error: {str(e)}"
 
+import re
+import ast
+
+def extract_metadata(input_string):
+    # Use regex to extract the page_content
+    page_content_match = re.search(r"page_content='(.+?)'\s+metadata=", input_string, re.DOTALL)
+    if page_content_match:
+        page_content = page_content_match.group(1)
+    else:
+        page_content = None
+
+    # Use regex to extract the metadata dictionary
+    metadata_match = re.search(r"metadata=(\{.+?\})", input_string)
+    if metadata_match:
+        metadata_str = metadata_match.group(1)
+        # Convert the metadata string to a dictionary
+        metadata = ast.literal_eval(metadata_str)
+    else:
+        metadata = None
+
+    return page_content, metadata
+
 #### Chatbot 함수 #############################
 if "results" not in st.session_state:
     st.session_state.results = []
@@ -93,11 +115,11 @@ async def call_jarvis(custom_template, llm_name, input_voice):
 
 async def chat_main(custome_template):
     with st.container():
-        llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "phi3(3.8B)", "llama3(8B)"], index=0, key="dsfv", help="Internet is not needed")
+        llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
         if llm1 == "Gemma(2B)": llm_name = "gemma:2b"
-        elif llm1 == "phi3(3.8B)": llm_name = "phi3:latest"
-        elif llm1 == "llama3(8B)": llm_name = "llama3:latest"
+        elif llm1 == "Phi3(3.8B)": llm_name = "phi3:latest"
+        elif llm1 == "Llama3(8B)": llm_name = "llama3:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Qeustions", placeholder="Input your Qeustions", key="dldfs")
@@ -116,9 +138,11 @@ async def chat_main(custome_template):
                 end_time = datetime.now()
                 delta = calculate_time_delta(start_time, end_time)
                 st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
-                col111, col112 = st.columns(2)
-                with col111: st.write(st.session_state.output)
-                with col112: st.write(st.session_state.trans)
+
+                with st.container():
+                    col111, col112 = st.columns(2)
+                    with col111: st.write(st.session_state.output)
+                    with col112: st.write(st.session_state.trans)
                 st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
                 if st.session_state.output:
                     await tts(st.session_state.output)
@@ -135,10 +159,11 @@ async def chat_main(custome_template):
                 end_time = datetime.now()
                 delta = calculate_time_delta(start_time, end_time)
                 st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
-
-                col111, col112 = st.columns(2)
-                with col111: st.write_stream(stream_data(st.session_state.output))
-                with col112: st.write(st.session_state.trans)
+                with st.container():
+                    col111, col112 = st.columns(2)
+                    with col111: st.write(st.session_state.output)
+                    with col112: st.write(st.session_state.trans)
+                
                 st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
                 if st.session_state.output:
                     await tts(st.session_state.output)
@@ -151,6 +176,8 @@ async def chat_main(custome_template):
             st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
         else:
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
+
+        
 
 #### VectorDB 함수 #################################################    
 if "retriever" not in st.session_state:
@@ -168,8 +195,12 @@ if "path" not in st.session_state:
     st.session_state.rag_messages = [{"role": "assistant", "content": "How can I help you?"}]
     st.session_state.rag_reversed_messages = ""
 
+if "doc_list" not in st.session_state:
+    st.session_state.doc_list = []
+
 custom_loader = CustomPDFLoader()
 cv = ChromaViewer
+showpdf = ShowPdf()
 
 def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorDB생성 및 저장
     with st.spinner("Processing..."):
@@ -180,22 +211,22 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
             db=Chroma.from_documents(splitted_texts, embedding=embed_model, persist_directory="vector_index")
         if st.session_state.retirever: 
             st.session_state.retirever
-            st.info("VectorStore Created")
+            st.info("VectorStore is Updated")
 
 #### RAG 함수 #################################################    
-async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p):
+async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
    
-async def call_rag(custome_template, llm_name, query, temp, top_k, top_p):
+async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc):
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis"
-        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p)
+        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc)
         retrival_output = res["output"][0]
         output = res["output"][1]
         trans_res = await trans(output)
@@ -204,20 +235,21 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p):
     except Exception as e:
         return f"Error: {str(e)}"
   
-async def rag_main(custome_template):
-    col911, col922, col933 = st.columns(3)
-    with col911: temp = st.slider("🌡️ :blue[Temperature(Default:0)]", min_value=0.0, max_value=2.0)
-    with col922: top_k = st.slider("🎲 :blue[Probability of Nonsense(Default:0)]", min_value=0, max_value=100)
-    with col933: top_p = st.slider("📝 :blue[More Diverse Text(Default:0)]", min_value=0.0, max_value=1.0)
+async def rag_main(custome_template, doc=None):
+    with st.expander("🧪 Hyper-Parameters"):
+        col911, col922, col933 = st.columns(3)
+        with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0)
+        with col922: top_k = st.slider("🎲 :blue[Probability of Nonsense]", min_value=0, max_value=100)
+        with col933: top_p = st.slider("📝 :blue[More Diverse Text]", min_value=0.0, max_value=1.0)
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "phi3(3.8B)", "llama3(8B)"], index=0, key="dsssv", help="Internet is not needed")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
     with st.container():
         if llm2 == "Gemma(2B)": llm_name = "gemma:2b"
-        elif llm2 == "phi3(3.8B)": llm_name = "phi3:latest"
-        elif llm2 == "llama3(8B)": llm_name = "llama3:latest"
+        elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
+        elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
@@ -231,7 +263,7 @@ async def rag_main(custome_template):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p)
+                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -242,8 +274,7 @@ async def rag_main(custome_template):
                 col111, col112 = st.columns(2)
                 with col111: st.write(st.session_state.rag_output)
                 with col112: st.write(st.session_state.trans)
-                with st.expander("Retrieval doc"):
-                    st.session_state.rag_doc
+
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
                 if st.session_state.rag_output:
@@ -254,7 +285,7 @@ async def rag_main(custome_template):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p)
+            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -266,36 +297,58 @@ async def rag_main(custome_template):
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.rag_output)
             with col112: st.write(st.session_state.trans)
-            with st.expander("Retrieval doc"):
-                st.session_state.rag_doc
+            
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
-
             if st.session_state.rag_output:
                 await tts(st.session_state.rag_output)
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+
+    with st.expander("Retrieval Documents(Metadata) & Images"):
+        meta_list = []
+        img_dict = dict()
+        for d in st.session_state.rag_doc:
+            page_content, metadata = extract_metadata(d)
+            meta_list.append(metadata)
+            if metadata["keywords"] not in img_dict.keys():
+                img_dict[metadata["keywords"]] =[]
+                img_dict[metadata["keywords"]].append(metadata["page_number"])
+            else:
+                img_dict[metadata["keywords"]].append(metadata["page_number"])
+        meta_list
+        base_img_path = "./images/"
+        for k in img_dict.keys():
+            path = base_img_path + str(k)
+            imgs = list_selected_files(path, "png")
+
+        sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
+
+        for i in sel2_img:
+            path = base_img_path +str(k) +"/"+str(i)
+            st.image(path, caption=path)
+
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
             st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
         else:
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
-async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key):
+async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
     
 store = {}
-async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key):
+async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc):
     global store
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
-        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key)
+        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
         retrival_output = res["output"][0]["context"]
         output = res["output"][0]["answer"]
         history = res["output"][0]["chat_history"]
@@ -306,29 +359,30 @@ async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, 
     except Exception as e:
         return f"Error: {str(e)}"
     
-async def rag_main_history(custome_template):
+async def rag_main_history(custome_template, doc):
     global store
-    col9111, col9222, col9333 = st.columns(3)
-    with col9111: temp = st.slider("🌡️ :blue[Temperature(Default:0)]", min_value=0.0, max_value=2.0, key="wedsf")
-    with col9222: top_k = st.slider("🎲 :blue[Probability of Nonsense(Default:0)]", min_value=0, max_value=100, key="xvvd")
-    with col9333: top_p = st.slider("📝 :blue[More Diverse Text(Default:0)]", min_value=0.0, max_value=1.0, key="qwer")
+    with st.expander("🧪 Hyper-Parameters"):
+        col9111, col9222, col9333 = st.columns(3)
+        with col9111: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, key="wedsf")
+        with col9222: top_k = st.slider("🎲 :blue[Probability of Nonsense]", min_value=0, max_value=100, key="xvvd")
+        with col9333: top_p = st.slider("📝 :blue[More Diverse Text]", min_value=0.0, max_value=1.0, key="qwer")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "phi3(3.8B)", "llama3(8B)"], index=0, key="dsssadfsv", help="Internet is not needed")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
 
     with st.container():
         if llm2 == "Gemma(2B)": llm_name = "gemma:2b"
-        elif llm2 == "phi3(3.8B)": llm_name = "phi3:latest"
-        elif llm2 == "llama3(8B)": llm_name = "llama3:latest"
+        elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
+        elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dlsdfg")
     
     col31, col32, col33 = st.columns(3)
     with col31: rag_btn = st.button("💬 RAG Jarvis", help="Without Text Query, Click & Say 'Jarvis'. Jarvis will replay 'Yes, Master' and then Speak your Requests", key="wqwe")
-    with col32: history_init = st.button("🗑️ Init History", help="대화 History 삭제(초기화)")
-    with col33: history_key = st.number_input("🔑 history_key", min_value=1, step=1, key="wqeqq", help="History를 기억하는 구분 id (같은 id 범위내 대화 이력 기억)")
+    with col32: history_init = st.button("🗑️ Init History", help="Remove Conversation History(Init)")
+    with col33: history_key = st.number_input("🔑 history_key", min_value=1, step=1, key="wqeqq", help="History to be remembered under the same key(id)")
 
     if history_init: store ={}
 
@@ -340,7 +394,7 @@ async def rag_main_history(custome_template):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key)
+                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.rag_history = history
@@ -350,12 +404,11 @@ async def rag_main_history(custome_template):
                 st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
 
                 col81, col82 = st.columns(2)
-                with col81: 
-                    st.write(st.session_state.rag_output)
-                    st.write(st.session_state.trans)
-                with col82: st.write(st.session_state.rag_history)
-                with st.expander("Retrieval Documents"):
-                    st.write(st.session_state.rag_doc)
+                with col81: st.write(st.session_state.rag_output)
+                with col82: st.write(st.session_state.trans)
+                
+                with st.expander("History"):
+                    st.write(st.session_state.rag_history)
 
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
@@ -367,7 +420,7 @@ async def rag_main_history(custome_template):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key)
+            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.rag_history = history
@@ -377,12 +430,10 @@ async def rag_main_history(custome_template):
             st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
 
             col81, col82 = st.columns(2)
-            with col81: 
-                st.write(st.session_state.rag_output)
-                st.write(st.session_state.trans)
-            with col82: st.write(st.session_state.rag_history)
-            with st.expander("Retrieval Documents"):
-                st.write(st.session_state.rag_doc)
+            with col81: st.write(st.session_state.rag_output)
+            with col82: st.write(st.session_state.trans)
+            with st.expander("History"):
+                st.write(st.session_state.rag_history)
 
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
             if st.session_state.rag_output:
@@ -390,6 +441,29 @@ async def rag_main_history(custome_template):
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+    with st.expander("Retrieval Documents(Metadata) & Images"):
+        meta_list = []
+        img_dict = dict()
+        for d in st.session_state.rag_doc:
+            page_content, metadata = extract_metadata(d)
+            meta_list.append(metadata)
+            if metadata["keywords"] not in img_dict.keys():
+                img_dict[metadata["keywords"]] =[]
+                img_dict[metadata["keywords"]].append(metadata["page_number"])
+            else:
+                img_dict[metadata["keywords"]].append(metadata["page_number"])
+        meta_list
+        base_img_path = "./images/"
+        for k in img_dict.keys():
+            path = base_img_path + str(k)
+            imgs = list_selected_files(path, "png")
+
+        sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
+
+        for i in sel2_img:
+            path = base_img_path +str(k) +"/"+str(i)
+            st.image(path, caption=path)
+
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
             st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
@@ -428,9 +502,6 @@ If the context doesn't contain any relevant information to the question, don't m
 
 }
 
-# def json_to_columns(json_str):
-#     json_dict = json.loads(json_str)
-#     return pd.Series(json_dict)
 
 if __name__ == "__main__":
     st.title("⚓ :blue[AI Jarvis]")
@@ -441,25 +512,34 @@ if __name__ == "__main__":
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore (embedding your PDFs)
                     - In the Dev mode,Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
-    tab1, tab2, tab3 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**"])
+    tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
     with tab1:
         with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "English_Teacher", "Movie_Teller", "Food_Teller"])
-            custome_template = st.text_area("Template", custome_templates[sel_template], height=200)
+            sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "English_Teacher", "Movie_Teller", "Food_Teller"], help="Define the roll of LLM")
+            custome_template = st.text_area("📒 Template", custome_templates[sel_template], height=200)
         asyncio.run(chat_main(custome_template))
 
     with tab2:
+        col71, col72 = st.columns(2)
+        with col71: history_check = st.checkbox("History_Aware_Conversation", help="If you want LLM to remember our conversation history, please check.")
+        with col72: sel_doc_check = st.checkbox("Specify Document", help="You can search the specified target document")
+        if sel_doc_check:
+            with st.expander("📚 Specify the Target Document", expanded=True):
+                sel_doc = st.radio("📌 Target Search Document", st.session_state.doc_list)
+        else:
+            sel_doc = None
+
+
         with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Navigation_Engineer", "Electrical_Engineer"])
-            custome_template = st.text_area("Template", rag_sys_templates[sel_template], height=200)
-        history_check = st.checkbox("History Chat")
+            sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Navigation_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
+            custome_template = st.text_area("📒 Template", rag_sys_templates[sel_template], height=200)
 
         try:
             if history_check:
                 store = {}
-                asyncio.run(rag_main_history(custome_template))
+                asyncio.run(rag_main_history(custome_template, sel_doc))
             else:
-                asyncio.run(rag_main(custome_template))
+                asyncio.run(rag_main(custome_template, sel_doc))
         except:
             st.empty()
 
@@ -499,9 +579,19 @@ if __name__ == "__main__":
 
                 if st.session_state.pages:
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)
-                    st.info("VectorStore is updated")
+                    
             except:
                 pass
+
+        df = cv.view_collections("vector_index")
+        df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
+        doc_list = df["title"].unique().tolist()
+        st.session_state.doc_list = sorted(doc_list)
+
+        with st.expander("📋 Document List"):
+            for doc in st.session_state.doc_list:
+                st.markdown(f"- {doc}")
+
 
         with st.expander("🔎 Retrieval Test (Similarity Search)"):
             embed_model = OllamaEmbeddings(model="nomic-embed-text")
@@ -512,18 +602,13 @@ if __name__ == "__main__":
                     st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
             st.session_state.retrievals
 
-        df = cv.view_collections("vector_index")
-        df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
-        doc_list = df["title"].unique().tolist()
-        doc_list = sorted(doc_list)
-        
-        with st.expander("📋 Document List"):
-            for doc in doc_list:
-                st.markdown(f"- {doc}")
-
         st.markdown(f"**Dataframe Shape: {df.shape}**")
         st.dataframe(df, use_container_width=True)
 
+    
+    with tab4:
+        st.warning("Under Construction")
+        st.empty()
         
 
 

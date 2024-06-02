@@ -78,13 +78,15 @@ async def jarvis_chat(template, llm_name, input_voice):
 
 
 
-async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p):
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
-    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
-    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords":"FWG"}}) 
-    # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
+    if doc == None:
+        retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
+    else:
+        retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords":doc}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
     docs = await asyncio.to_thread(retriever.invoke, query)
 
@@ -109,18 +111,22 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
 
 
 store = {}
-def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key):
+def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None):
     global store
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    retriever = vectorstore.as_retriever() 
+    if doc == None:
+        retriever = vectorstore.as_retriever() 
+    else:
+        retriever = vectorstore.as_retriever(search_kwargs={"filter": {"keywords":doc}}) 
 
     ### Contextualize question ###
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
     which might reference context in the chat history, formulate a standalone question \
     which can be understood without the chat history. Do NOT answer the question, \
     just reformulate it if needed and otherwise return it as is."""
+
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", contextualize_q_system_prompt),
@@ -132,13 +138,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         llm, retriever, contextualize_q_prompt
         )
 
-    ### Answer question ###
-    # qa_system_prompt = """You are an assistant for question-answering tasks. \
-    # Use the following pieces of retrieved context to answer the question. \
-    # If you don't know the answer, just say that you don't know. \
-    # Use three sentences maximum and keep the answer concise.\
-
-    # {context}"""
     qa_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", custom_template),
@@ -199,6 +198,7 @@ from fastapi import FastAPI, Response
 import json
 from pydantic import BaseModel
 import asyncio
+from typing import Optional
 
 app = FastAPI(
     title="AI-Jarvis",
@@ -218,6 +218,7 @@ class RagOllamaRequest(BaseModel):
     temperature: float
     top_k: int
     top_p: float
+    doc: Optional[str]
 
 class RagOllamaRequestHistory(BaseModel):
     template: str
@@ -227,6 +228,7 @@ class RagOllamaRequestHistory(BaseModel):
     top_k: int
     top_p: float
     history_key: int
+    doc: Optional[str]
 
 class TTSRequest(BaseModel):
     output: str
@@ -262,14 +264,14 @@ async def call_jarvis_chat(request: OllamaRequest):
 
 @app.post("/call_rag_jarvis")
 async def call_jarvis_rag(request: RagOllamaRequest):
-    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p)
+    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
 @app.post("/call_rag_jarvis_with_history")
 async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
-    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key)
+    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
