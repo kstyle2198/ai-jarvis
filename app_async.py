@@ -216,19 +216,19 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
             st.info("VectorStore is Updated")
 
 #### RAG 함수 #################################################    
-async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, multi_q):
+async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, re_rank, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "multi_q":multi_q}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "re_rank": re_rank, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
    
-async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q):
+async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q):
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis"
-        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
+        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
         retrival_output = res["output"][0]
         output = res["output"][1]
         trans_res = await trans(output)
@@ -237,7 +237,7 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, m
     except Exception as e:
         return f"Error: {str(e)}"
   
-async def rag_main(custome_template, doc=None, multi_q=False):
+async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
     with st.expander("🧪 Hyper-Parameters"):
         col911, col922, col933 = st.columns(3)
         with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
@@ -265,7 +265,7 @@ async def rag_main(custome_template, doc=None, multi_q=False):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
+                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -287,7 +287,7 @@ async def rag_main(custome_template, doc=None, multi_q=False):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, multi_q)
+            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -295,6 +295,7 @@ async def rag_main(custome_template, doc=None, multi_q=False):
 
             delta = calculate_time_delta(start_time, end_time)
             st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
+            st.session_state.rag_doc
 
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.rag_output)
@@ -337,32 +338,33 @@ async def rag_main(custome_template, doc=None, multi_q=False):
         else:
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
-async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc):
+
+
+async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
     
 store = {}
-async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc):
+async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q):
     global store
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
-        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
+        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
         retrival_output = res["output"][0]["context"]
         output = res["output"][0]["answer"]
         history = res["output"][0]["chat_history"]
         trans_res = await trans(output)
         trans_output = trans_res['output'][0]
-        
         return retrival_output, output, history, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
     
-async def rag_main_history(custome_template, doc):
+async def rag_main_history(custome_template, doc, multi_q):
     global store
     with st.expander("🧪 Hyper-Parameters"):
         col9111, col9222, col9333 = st.columns(3)
@@ -397,7 +399,7 @@ async def rag_main_history(custome_template, doc):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
+                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.rag_history = history
@@ -423,7 +425,7 @@ async def rag_main_history(custome_template, doc):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc)
+            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.rag_history = history
@@ -525,10 +527,11 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
-        col71, col72, col73 = st.columns([4, 3, 3])
-        with col71: history_check = st.checkbox("History_Aware_Conversation", help="If you want LLM to remember our conversation history, please check.")
+        col71, col72, col73, col74 = st.columns([3, 3, 3, 3])
+        with col71: history_check = st.checkbox("History_Aware", help="If you want LLM to remember our conversation history, please check.")
         with col72: sel_doc_check = st.checkbox("Specify Document", help="You can search the specified target document")
-        with col73: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
+        with col73: re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
+        with col74: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
         if sel_doc_check:
             with st.expander("📚 Specify the Target Document", expanded=True):
                 sel_doc = st.radio("📌 Target Search Document", st.session_state.doc_list)
@@ -543,9 +546,9 @@ if __name__ == "__main__":
         try:
             if history_check:
                 store = {}
-                asyncio.run(rag_main_history(custome_template, sel_doc))
+                asyncio.run(rag_main_history(custome_template, sel_doc, multi_check))
             else:
-                asyncio.run(rag_main(custome_template, sel_doc, multi_check))
+                asyncio.run(rag_main(custome_template, sel_doc, re_rank_check, multi_check))
         except:
             st.empty()
 

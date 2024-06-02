@@ -18,11 +18,34 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.chat_history import BaseChatMessageHistory
-
+from sentence_transformers import CrossEncoder
+from langchain_core.documents import Document
+import re
+import ast
 
 
 selected_voice = "David"   # David, Hazel
 language = "en"
+
+
+def extract_metadata(input_string):
+    # Use regex to extract the page_content
+    page_content_match = re.search(r"page_content='(.+?)'\s+metadata=", input_string, re.DOTALL)
+    if page_content_match:
+        page_content = page_content_match.group(1)
+    else:
+        page_content = None
+
+    # Use regex to extract the metadata dictionary
+    metadata_match = re.search(r"metadata=(\{.+?\})", input_string)
+    if metadata_match:
+        metadata_str = metadata_match.group(1)
+        # Convert the metadata string to a dictionary
+        metadata = ast.literal_eval(metadata_str)
+    else:
+        metadata = None
+
+    return page_content, metadata
 
 
 def say_hello():
@@ -80,28 +103,61 @@ async def jarvis_chat(template, llm_name, input_voice):
 
 from langchain.retrievers.multi_query import MultiQueryRetriever
 
-async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, multi_q=False):
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
 
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
     else:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords":doc}}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
-    if multi_q:
-        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm)
-    else:
-        pass
+    #########################################################################################
+    if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
+    else: pass
 
     import logging
     logging.basicConfig()
     logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
+    ###############################################################################################
 
     docs = await asyncio.to_thread(retriever.invoke, query)
+    print(docs)
+    print("-"*50)
+    meta_list = []
+    for doc in docs:
+        meta_list.append(doc.metadata)
+    print(meta_list)
+    #############################################################################
+    if re_rank:
+        cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
+        docs = cross_encoder.rank(
+                query,
+                [doc.page_content for doc in docs],
+                top_k=3,
+                return_documents=True,
+                )
+        
+        print(docs)
+        corpus_ids = []
+        for doc in docs:
+            corpus_ids.append(doc["corpus_id"])
+        print(corpus_ids)
+
+        rearranged_docs = []
+        for idx, rr_reranked_doc in zip(corpus_ids, docs):
+            result = Document(
+                page_content=rr_reranked_doc["text"],
+                metadata = meta_list[idx]
+            )
+            rearranged_docs.append(result)
+
+        docs = rearranged_docs
+    else: pass
+    ############################################################################
 
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
@@ -123,7 +179,7 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
 
 
 store = {}
-def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None):
+def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None, multi_q=False):
     global store
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
@@ -133,6 +189,14 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     else:
         retriever = vectorstore.as_retriever(search_kwargs={"filter": {"keywords":doc}}) 
 
+    #########################################################################################
+    if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
+    else: pass
+
+    import logging
+    logging.basicConfig()
+    logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
+    ###############################################################################################
 
 
     ### Contextualize question ###
@@ -233,6 +297,7 @@ class RagOllamaRequest(BaseModel):
     top_k: int
     top_p: float
     doc: Optional[str]
+    re_rank: bool
     multi_q: bool
 
 class RagOllamaRequestHistory(BaseModel):
@@ -244,6 +309,7 @@ class RagOllamaRequestHistory(BaseModel):
     top_p: float
     history_key: int
     doc: Optional[str]
+    multi_q: bool
 
 class TTSRequest(BaseModel):
     output: str
@@ -279,14 +345,14 @@ async def call_jarvis_chat(request: OllamaRequest):
 
 @app.post("/call_rag_jarvis")
 async def call_jarvis_rag(request: RagOllamaRequest):
-    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc, request.multi_q)
+    res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc, request.re_rank, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
 
 @app.post("/call_rag_jarvis_with_history")
 async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
-    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc)
+    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
