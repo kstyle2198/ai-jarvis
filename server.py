@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Response
 import uvicorn
-import os
 import json
 
 from RealtimeTTS import TextToAudioStream, SystemEngine
@@ -16,18 +15,17 @@ from langchain_community.embeddings import OllamaEmbeddings
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_community.document_loaders import WebBaseLoader
+from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_core.chat_history import BaseChatMessageHistory
 from sentence_transformers import CrossEncoder
 from langchain_core.documents import Document
 import re
 import ast
 
-
 selected_voice = "David"   # David, Hazel
 language = "en"
 
-
+################## 공통함수 + STT + TTS ###################################################################################################
 def extract_metadata(input_string):
     # Use regex to extract the page_content
     page_content_match = re.search(r"page_content='(.+?)'\s+metadata=", input_string, re.DOTALL)
@@ -47,13 +45,11 @@ def extract_metadata(input_string):
 
     return page_content, metadata
 
-
 def say_hello():
     TextToAudioStream(SystemEngine(voice=selected_voice ,print_installed_voices=False)).feed("Yes, Master").play(language="en")
 
 def recording_finished():
     print("Speech end detected... transcribing...")
-
 
 async def jarvis_stt():
     global language
@@ -84,7 +80,7 @@ async def jarvis_tts(input_txt, language=language):
     await asyncio.to_thread(tts.feed, dummy_generator(input_txt))
     await asyncio.to_thread(tts.play, language=language)
 
-
+############## Chatbot Functions ####################################################################################
 from functools import partial
 def create_prompt(template, **kwargs):
     return template.format(**kwargs)
@@ -99,10 +95,7 @@ async def jarvis_chat(template, llm_name, input_voice):
     sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
 
-
-
-from langchain.retrievers.multi_query import MultiQueryRetriever
-
+################ Rag Functions ########################################################################################
 async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
@@ -115,7 +108,7 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
-    #########################################################################################
+    #### Multi Query ############################################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
     else: pass
 
@@ -125,27 +118,30 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
     ###############################################################################################
 
     docs = await asyncio.to_thread(retriever.invoke, query)
+    ###### Re Ranking ##############################################################
     print(docs)
     print("-"*50)
     meta_list = []
     for doc in docs:
         meta_list.append(doc.metadata)
     print(meta_list)
-    #############################################################################
+
     if re_rank:
         cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
         docs = cross_encoder.rank(
                 query,
                 [doc.page_content for doc in docs],
                 top_k=3,
-                return_documents=True,
-                )
+                return_documents=True,)
         
         print(docs)
         corpus_ids = []
         for doc in docs:
             corpus_ids.append(doc["corpus_id"])
+            
+        print("+"*50)
         print(corpus_ids)
+        print("+"*50)
 
         rearranged_docs = []
         for idx, rr_reranked_doc in zip(corpus_ids, docs):
@@ -185,11 +181,11 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
-        retriever = vectorstore.as_retriever() 
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) 
     else:
-        retriever = vectorstore.as_retriever(search_kwargs={"filter": {"keywords":doc}}) 
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
 
-    #########################################################################################
+    ######## Multi Query ##############################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
     else: pass
 
@@ -228,7 +224,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
     ### Statefully manage chat history ###
-    
     def get_session_history(session_id: str) -> BaseChatMessageHistory:
         if session_id not in store:
             store[session_id] = ChatMessageHistory()
@@ -256,7 +251,7 @@ async def async_jarvis_rag_with_history(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, jarvis_rag_with_history, *args, **kwargs)
 
-
+################### Translation #########################################################################################################
 import asyncio
 from aiogoogletrans import Translator
 
@@ -271,18 +266,10 @@ async def trans_main(txt):
     translations = await asyncio.gather(*[trans(txt, input_lang, target_lang) for target_lang in target_langs])
     return translations
 
-##########################################################################################################################################
-from fastapi import FastAPI, Response
-import json
-from pydantic import BaseModel
-import asyncio
-from typing import Optional
 
-app = FastAPI(
-    title="AI-Jarvis",
-    description="Local RAG Chatbot without Internet",
-    version="0.0"
-    )
+############## Schemas ############################################################################################################
+from pydantic import BaseModel
+from typing import Optional
 
 class OllamaRequest(BaseModel):
     template: str
@@ -316,6 +303,17 @@ class TTSRequest(BaseModel):
 
 class TRANSRequest(BaseModel):
     txt: str
+
+###### FastAPI Endpoint ###########################################################################################################
+from fastapi import FastAPI, Response
+import json
+import asyncio
+
+app = FastAPI(
+    title="AI-Jarvis",
+    description="Local RAG Chatbot without Internet",
+    version="0.0"
+    )
 
 @app.post("/jarvis_stt")
 async def call_jarvis_stt():
@@ -356,6 +354,8 @@ async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
+
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host='localhost', port=8000)

@@ -16,7 +16,6 @@ else:
     layout = "wide" if st.session_state.center else "centered"
 st.set_page_config(page_title="AI Jarvis", layout=layout)
 
-
 st.markdown(
             """
         <style>
@@ -32,12 +31,13 @@ st.markdown(
 parent_dir = Path(__file__).parent
 base_dir = str(parent_dir) + "\data"  
 
+
+#### 공통함수 #############################################################################
 def list_selected_files(path, 확장자):
     file_list = os.listdir(path)
     selected_files = [file for file in file_list if file.endswith(확장자)]
     return selected_files
 
-#### 공통함수 ############
 def stream_data(output):
     for word in output.split(" "):
         yield word + " "
@@ -97,7 +97,7 @@ def extract_metadata(input_string):
 
     return page_content, metadata
 
-#### Chatbot 함수 #############################
+#### Chatbot 함수 ###################################################
 if "results" not in st.session_state:
     st.session_state.results = []
     st.session_state.output = ""
@@ -181,7 +181,6 @@ async def chat_main(custome_template):
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
         
-
 #### VectorDB 함수 #################################################    
 if "retriever" not in st.session_state:
     st.session_state.retirever = ""
@@ -215,7 +214,7 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
             st.session_state.retirever
             st.info("VectorStore is Updated")
 
-#### RAG 함수 #################################################    
+#### RAG_without_History 함수 ####################################################################################    
 async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, re_rank, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
@@ -339,7 +338,7 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
 
-
+##### RAG with History ###################################################################################################################
 async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
@@ -476,7 +475,7 @@ async def rag_main_history(custome_template, doc, multi_q):
         else:
             st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 
-### Templates ##########################################
+######## Templates ##########################################
 custome_templates = {
 "AI_CoPilot": '''you are an smart AI assistant in a commercial vessel like LNG Carriers or Container Carriers.
 your answer always starts with "OK, Master".
@@ -507,7 +506,7 @@ If the context doesn't contain any relevant information to the question, don't m
 'Electrical_Engineer': "Not prepared yet",
 
 }
-
+########################################################################################################################################################################
 if __name__ == "__main__":
     st.title("⚓ :blue[AI Jarvis]")
     st.checkbox("Wide Layout", key="center", value=st.session_state.get("center", False))
@@ -527,10 +526,14 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
-        col71, col72, col73, col74 = st.columns([3, 3, 3, 3])
+        col71, col72, col73, col74 = st.columns([4, 4, 3, 4])
         with col71: history_check = st.checkbox("History_Aware", help="If you want LLM to remember our conversation history, please check.")
-        with col72: sel_doc_check = st.checkbox("Specify Document", help="You can search the specified target document")
-        with col73: re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
+        with col72: sel_doc_check = st.checkbox("Specify_Docu", help="You can search the specified target document")
+        with col73: 
+            if history_check:
+                re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank", disabled=True)
+            else:
+                re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
         with col74: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
         if sel_doc_check:
             with st.expander("📚 Specify the Target Document", expanded=True):
