@@ -2,6 +2,6 @@
 
 fastapi dev server.py &
 
-streamlit run app_async1.py &
+streamlit run app_async.py &
 
 wait

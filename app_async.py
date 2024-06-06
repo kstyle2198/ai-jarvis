@@ -325,7 +325,7 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
             imgs = list_selected_files(path, "png")
 
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
-        image_show_check = st.checkbox("Show Images")
+        image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
@@ -463,7 +463,7 @@ async def rag_main_history(custome_template, doc, multi_q):
             imgs = list_selected_files(path, "png")
 
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
-        image_show_check = st.checkbox("Show Images")
+        image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
@@ -480,8 +480,7 @@ custome_templates = {
 "AI_CoPilot": '''you are an smart AI assistant in a commercial vessel like LNG Carriers or Container Carriers.
 your answer always starts with "OK, Master".
 generate compact and summarized answer to {query} with numbering kindly and shortly.
-if there are not enough information to generate answers, just return "Please give me more information"
-if the query does not give you enough information, return a question for additional information.
+if there are not enough information to generate answers, just return "Please give me more information" or ask a question for additional information.
 for example, 'could you give me more detailed informations about it?'
 ''',
 "English_Teacher": '''you are an smart AI English teacher to teach expresssions about daily life.
@@ -508,7 +507,7 @@ If the context doesn't contain any relevant information to the question, don't m
 }
 ########################################################################################################################################################################
 if __name__ == "__main__":
-    st.title("⚓ :blue[AI Jarvis]")
+    st.title("⚓ AI Jarvis")
     st.checkbox("Wide Layout", key="center", value=st.session_state.get("center", False))
 
     with st.expander("🚢 Note"):
@@ -527,8 +526,8 @@ if __name__ == "__main__":
 
     with tab2:
         col71, col72, col73, col74 = st.columns([4, 4, 3, 4])
-        with col71: history_check = st.checkbox("History_Aware", help="If you want LLM to remember our conversation history, please check.")
-        with col72: sel_doc_check = st.checkbox("Specify_Docu", help="You can search the specified target document")
+        with col71: history_check = st.checkbox("History_Aware", help="If checked, LLM will remember our conversation history")
+        with col72: sel_doc_check = st.checkbox("Specify_Docs", help="If checked, search every documents. if not, search only selected documents")
         with col73: 
             if history_check:
                 re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank", disabled=True)
@@ -536,8 +535,8 @@ if __name__ == "__main__":
                 re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
         with col74: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
         if sel_doc_check:
-            with st.expander("📚 Specify the Target Document", expanded=True):
-                sel_doc = st.radio("📌 Target Search Document", st.session_state.doc_list)
+            with st.expander("📚 Specify the Target Documents", expanded=True):
+                sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
         else:
             sel_doc = None
 

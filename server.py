@@ -96,16 +96,16 @@ async def jarvis_chat(template, llm_name, input_voice):
     return sentence
 
 ################ Rag Functions ########################################################################################
-async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, re_rank=False, multi_q=False):
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=[], re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
 
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    if doc == None:
+    if doc == []:
         retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
     else:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': ["Unit_Cooler", "FWG"]}}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': doc}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
     #### Multi Query ############################################################################
@@ -175,15 +175,15 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
 
 
 store = {}
-def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None, multi_q=False):
+def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=[], multi_q=False):
     global store
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    if doc == None:
+    if doc == []:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) 
     else:
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}})  
 
     ######## Multi Query ##############################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
@@ -283,7 +283,7 @@ class RagOllamaRequest(BaseModel):
     temperature: float
     top_k: int
     top_p: float
-    doc: Optional[str]
+    doc: Optional[list]
     re_rank: bool
     multi_q: bool
 
@@ -295,7 +295,7 @@ class RagOllamaRequestHistory(BaseModel):
     top_k: int
     top_p: float
     history_key: int
-    doc: Optional[str]
+    doc: Optional[list]
     multi_q: bool
 
 class TTSRequest(BaseModel):
