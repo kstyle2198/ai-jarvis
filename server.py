@@ -21,32 +21,33 @@ from sentence_transformers import CrossEncoder
 from langchain_core.documents import Document
 import re
 import ast
+import logging
+
 
 selected_voice = "David"   # David, Hazel
 language = "en"
 
-################## 공통함수 + STT + TTS ###################################################################################################
+# selected_voice = "Heami"   
+# language = "ko"
+
+############# [Start] 공통함수 + STT + TTS ###################################################################################################
 def extract_metadata(input_string):
     # Use regex to extract the page_content
     page_content_match = re.search(r"page_content='(.+?)'\s+metadata=", input_string, re.DOTALL)
-    if page_content_match:
-        page_content = page_content_match.group(1)
-    else:
-        page_content = None
-
+    if page_content_match: page_content = page_content_match.group(1)
+    else: page_content = None
     # Use regex to extract the metadata dictionary
     metadata_match = re.search(r"metadata=(\{.+?\})", input_string)
     if metadata_match:
         metadata_str = metadata_match.group(1)
         # Convert the metadata string to a dictionary
         metadata = ast.literal_eval(metadata_str)
-    else:
-        metadata = None
-
+    else: metadata = None
     return page_content, metadata
 
 def say_hello():
-    TextToAudioStream(SystemEngine(voice=selected_voice ,print_installed_voices=False)).feed("Yes, Master").play(language="en")
+    global language
+    TextToAudioStream(SystemEngine(voice=selected_voice ,print_installed_voices=False)).feed("Yes, Captain").play(language=language)
 
 def recording_finished():
     print("Speech end detected... transcribing...")
@@ -61,32 +62,26 @@ async def jarvis_stt():
                             on_recording_stop=recording_finished,
                             enable_realtime_transcription=False,
                             ) as recorder:
-        ready_msg = 'Say "Jarvis" then speak.'
-        print(ready_msg)
-        
-        # Assuming recorder.text() is a blocking call, run it in a separate thread
         input_voice = await asyncio.to_thread(recorder.text)
         print(input_voice)
         return input_voice
 
-async def jarvis_tts(input_txt, language=language):
+async def jarvis_tts(input_txt):
+    global language
     def dummy_generator(input_txt):
         yield input_txt
         print(input_txt)
-    
     tts = TextToAudioStream(SystemEngine(voice=selected_voice, print_installed_voices=False))
-    
     # Assuming feed and play are blocking calls, run them in a separate thread
     await asyncio.to_thread(tts.feed, dummy_generator(input_txt))
     await asyncio.to_thread(tts.play, language=language)
+##### [End] 공통함수 + STT + TTS #############################################################
 
-### Re-ranking Function ########################################################
+##### [Start] Re-ranking Function ########################################################
 def re_rank_documents(re_rank, docs, query):
-    
     meta_list = []
     for doc in docs:
         meta_list.append(doc.metadata)
-
     if re_rank:
         cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
         docs = cross_encoder.rank(
@@ -94,27 +89,25 @@ def re_rank_documents(re_rank, docs, query):
                 [doc.page_content for doc in docs],
                 top_k=3,
                 return_documents=True,)
-        
         print(docs)
         corpus_ids = []
         for doc in docs:
-            corpus_ids.append(doc["corpus_id"])
-            
+            corpus_ids.append(doc["corpus_id"]) 
         print("+"*50)
         print(f"re-ranked docs ids : {corpus_ids}")
         print("+"*50)
-
         rearranged_docs = []
         for idx, rr_reranked_doc in zip(corpus_ids, docs):
             result = Document(
                 page_content=rr_reranked_doc["text"],
                 metadata = meta_list[idx]
-            )
+                )
             rearranged_docs.append(result)
+        return rearranged_docs
     else: pass
-    return rearranged_docs
+##### [End] Re-ranking Function ########################################################
 
-############## Chatbot Functions ####################################################################################
+########[Start] Chatbot Functions ####################################################################################
 from functools import partial
 def create_prompt(template, **kwargs):
     return template.format(**kwargs)
@@ -128,35 +121,34 @@ async def jarvis_chat(template, llm_name, input_voice):
     chain = prompt | llm | StrOutputParser()
     sentence = await asyncio.to_thread(chain.invoke, query)
     return sentence
+########[End] Chatbot Functions ####################################################################################
 
-################ Rag Functions ########################################################################################
+########## [Start] Rag Functions ########################################################################################
 async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
 
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
     else:
         # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
         retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
-
+        
     #### Multi Query ############################################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
     else: pass
 
-    import logging
     logging.basicConfig()
     logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
     ###############################################################################################
-
     docs = await asyncio.to_thread(retriever.invoke, query)
     print(f"Number of 1st Retrieval Docs: {len(docs)}")
     ###### Re Ranking ##############################################################
-    docs = re_rank_documents(re_rank, docs, query)
+    if re_rank: docs = re_rank_documents(re_rank, docs, query)
+    else: pass
     ############################################################################
-
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
                     custom_template,),
@@ -174,8 +166,9 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         }
     )
     return docs, result
+########## [End] Rag Functions ########################################################################################
 
-
+########## [Start] Rag with History Functions ########################################################################################
 store = {}
 def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None, re_rank=False, multi_q=False):
     global store
@@ -211,7 +204,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     history_aware_retriever = create_history_aware_retriever(
         llm, retriever, contextualize_q_prompt
         )
-
     qa_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", custom_template),
@@ -236,29 +228,30 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         history_messages_key="chat_history",
         output_messages_key="answer",)
     
-    # Retrieve documents
+    #### Retrieve documents #################################################################
     retrieved_docs = retriever.invoke(query)
     print(f"Number of 1st Retrieval Docs: {len(retrieved_docs)}")
     #### Re-rank documents ########################################################################
-    re_ranked_docs = re_rank_documents(re_rank, retrieved_docs, query)
+    if re_rank: retrieved_docs = re_rank_documents(re_rank, retrieved_docs, query)
+    else: pass
     ###############################################################################################
 
     result = conversational_rag_chain.invoke(
-        {"input": query, "retrieved_docs": re_ranked_docs},
+        {"input": query, "retrieved_docs": retrieved_docs},
         config={
             "configurable": {"session_id": history_key}
-            },  
-            )
-    
+            }, )
+    result["retrieved_docs"] = retrieved_docs
     result["chat_history"] = store[history_key]
-
     return result, store
 
 async def async_jarvis_rag_with_history(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, jarvis_rag_with_history, *args, **kwargs)
+########## [End] Rag with History Functions ########################################################################################
 
-################### Translation #########################################################################################################
+
+############[Start] Translation #########################################################################################################
 import asyncio
 from aiogoogletrans import Translator
 
@@ -272,9 +265,9 @@ async def trans_main(txt):
     target_langs = ['ko']
     translations = await asyncio.gather(*[trans(txt, input_lang, target_lang) for target_lang in target_langs])
     return translations
+############[End] Translation #########################################################################################################
 
-
-############## Schemas ############################################################################################################
+############## [Start] Schemas ############################################################################################################
 from pydantic import BaseModel
 from typing import Optional
 
@@ -311,8 +304,9 @@ class TTSRequest(BaseModel):
 
 class TRANSRequest(BaseModel):
     txt: str
+############## [End] Schemas ############################################################################################################
 
-###### FastAPI Endpoint ###########################################################################################################
+###### [Start] FastAPI Endpoint ###########################################################################################################
 from fastapi import FastAPI, Response
 import json
 import asyncio
@@ -320,8 +314,7 @@ import asyncio
 app = FastAPI(
     title="AI-Jarvis",
     description="Local RAG Chatbot without Internet",
-    version="0.0"
-    )
+    version="0.0")
 
 @app.post("/jarvis_stt")
 async def call_jarvis_stt():
@@ -362,7 +355,7 @@ async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
-
+###### [End] FastAPI Endpoint ###########################################################################################################
 
 
 if __name__ == '__main__':
