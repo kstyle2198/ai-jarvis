@@ -310,14 +310,43 @@ class TRANSRequest(BaseModel):
 from fastapi import FastAPI, Response
 import json
 import asyncio
+import logging
 
 app = FastAPI(
     title="AI-Jarvis",
     description="Local RAG Chatbot without Internet",
     version="0.0")
 
+### [Start] Configure logging #######################
+logging.basicConfig(level=logging.INFO, filename='jarvis_log.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+'''
+** log levels
+- DEBUG: Use this level for detailed information useful for debugging purposes. It’s like wearing your detective hat and delving deep into the inner workings of your application.
+- INFO: This level is perfect for general information about what’s happening within the application. Think of it as your application’s way of saying, “Hey, everything’s running smoothly!”
+- WARNING: Uh-oh, something doesn’t seem quite right. Use this level to indicate potential issues that could lead to problems down the road.
+- ERROR: Houston, we have a problem! Use this level to signify errors that need immediate attention but won’t necessarily crash the application.
+- CRITICAL: Brace yourselves; things are about to hit the fan! Reserve this level for critical errors that could potentially bring your entire application crashing down.
+
+** parameters
+- level=logging.DEBUG: This sets the logging level to DEBUG, meaning all log messages will be captured.
+- filename='app.log': This specifies the name of the log file. You can choose any name you like.
+- filemode='a': This sets the file mode to append, so new log messages will be added to the end of the file.
+- format='%(asctime)s - %(levelname)s - %(message)s': This defines the format of the log messages, including the timestamp, log level, and message.
+'''
+@app.get("/")
+async def read_root():
+    logger.debug("Root endpoint accessed")
+    logger.info("Testing Info")
+    logger.warn("Testing Warning")
+    logger.error("Testing Error")
+    return {"message": "Hello World"}
+
+#### [End] Configure logging ########################################
+
 @app.post("/jarvis_stt")
 async def call_jarvis_stt():
+    logger.info(f"Jarvis STT requested")
     res = await jarvis_stt()
     result = {"input_voice": res}
     json_str = json.dumps(result, indent=4, default=str)
@@ -325,11 +354,13 @@ async def call_jarvis_stt():
 
 @app.post("/jarvis_tts")
 async def call_jarvis_tts(request: TTSRequest):
+    logger.info(f"Jarvis TTS requested")
     await jarvis_tts(request.output)
     return {"status": "completed"}
 
 @app.post("/jarvis_trans")
 async def jarvis_trans_main(request: TRANSRequest):
+    logger.info(f"Google Trans requested")
     res = await trans_main(request.txt)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
@@ -337,6 +368,7 @@ async def jarvis_trans_main(request: TRANSRequest):
 
 @app.post("/call_jarvis")
 async def call_jarvis_chat(request: OllamaRequest):
+    logger.info(f"Common Chat - {request.input_voice} requested")
     res = await jarvis_chat(request.template, request.llm_name, request.input_voice)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
@@ -344,6 +376,7 @@ async def call_jarvis_chat(request: OllamaRequest):
 
 @app.post("/call_rag_jarvis")
 async def call_jarvis_rag(request: RagOllamaRequest):
+    logger.info(f"RAG without History - {request.input_voice} requested")
     res = await jarvis_rag(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.doc, request.re_rank, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
@@ -351,6 +384,7 @@ async def call_jarvis_rag(request: RagOllamaRequest):
 
 @app.post("/call_rag_jarvis_with_history")
 async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
+    logger.info(f"RAG with History - {request.input_voice} requested")
     res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc, request.re_rank, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
