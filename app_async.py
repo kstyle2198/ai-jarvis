@@ -339,21 +339,21 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
 
 
 ##### RAG with History ###################################################################################################################
-async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, multi_q):
+async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, re_rank, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc, "multi_q":multi_q}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc, "re_rank": re_rank, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
     
 store = {}
-async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q):
+async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q):
     global store
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
-        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
+        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
         retrival_output = res["output"][0]["context"]
         output = res["output"][0]["answer"]
         history = res["output"][0]["chat_history"]
@@ -363,7 +363,7 @@ async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, 
     except Exception as e:
         return f"Error: {str(e)}"
     
-async def rag_main_history(custome_template, doc, multi_q):
+async def rag_main_history(custome_template, doc, re_rank=False, multi_q=False):
     global store
     with st.expander("🧪 Hyper-Parameters"):
         col9111, col9222, col9333 = st.columns(3)
@@ -398,7 +398,7 @@ async def rag_main_history(custome_template, doc, multi_q):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
+                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.rag_history = history
@@ -424,7 +424,7 @@ async def rag_main_history(custome_template, doc, multi_q):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, multi_q)
+            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.rag_history = history
@@ -529,10 +529,11 @@ if __name__ == "__main__":
         with col71: history_check = st.checkbox("History_Aware", help="If checked, LLM will remember our conversation history")
         with col72: sel_doc_check = st.checkbox("Specify_Docs", help="If checked, search every documents. if not, search only selected documents")
         with col73: 
-            if history_check:
-                re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank", disabled=True)
-            else:
-                re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
+            re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
+            # if history_check:
+            #     re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank", disabled=True)
+            # else:
+            #     re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
         with col74: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
         if sel_doc_check:
             with st.expander("📚 Specify the Target Documents", expanded=True):
@@ -548,7 +549,7 @@ if __name__ == "__main__":
         try:
             if history_check:
                 store = {}
-                asyncio.run(rag_main_history(custome_template, sel_doc, multi_check))
+                asyncio.run(rag_main_history(custome_template, sel_doc, re_rank_check, multi_check))
             else:
                 asyncio.run(rag_main(custome_template, sel_doc, re_rank_check, multi_check))
         except:

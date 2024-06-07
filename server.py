@@ -80,6 +80,40 @@ async def jarvis_tts(input_txt, language=language):
     await asyncio.to_thread(tts.feed, dummy_generator(input_txt))
     await asyncio.to_thread(tts.play, language=language)
 
+### Re-ranking Function ########################################################
+def re_rank_documents(re_rank, docs, query):
+    
+    meta_list = []
+    for doc in docs:
+        meta_list.append(doc.metadata)
+
+    if re_rank:
+        cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
+        docs = cross_encoder.rank(
+                query,
+                [doc.page_content for doc in docs],
+                top_k=3,
+                return_documents=True,)
+        
+        print(docs)
+        corpus_ids = []
+        for doc in docs:
+            corpus_ids.append(doc["corpus_id"])
+            
+        print("+"*50)
+        print(f"re-ranked docs ids : {corpus_ids}")
+        print("+"*50)
+
+        rearranged_docs = []
+        for idx, rr_reranked_doc in zip(corpus_ids, docs):
+            result = Document(
+                page_content=rr_reranked_doc["text"],
+                metadata = meta_list[idx]
+            )
+            rearranged_docs.append(result)
+    else: pass
+    return rearranged_docs
+
 ############## Chatbot Functions ####################################################################################
 from functools import partial
 def create_prompt(template, **kwargs):
@@ -96,17 +130,17 @@ async def jarvis_chat(template, llm_name, input_voice):
     return sentence
 
 ################ Rag Functions ########################################################################################
-async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=[], re_rank=False, multi_q=False):
+async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
 
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    if doc == []:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
+    if doc == None:
+        retriever = vectordb.as_retriever(search_kwargs={"k": 3}) 
     else:
         # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
-        retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {"keywords": {'$in': doc}}}) 
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 3, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
 
     #### Multi Query ############################################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
@@ -118,41 +152,9 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
     ###############################################################################################
 
     docs = await asyncio.to_thread(retriever.invoke, query)
+    print(f"Number of 1st Retrieval Docs: {len(docs)}")
     ###### Re Ranking ##############################################################
-    print(docs)
-    print("-"*50)
-    meta_list = []
-    for doc in docs:
-        meta_list.append(doc.metadata)
-    print(meta_list)
-
-    if re_rank:
-        cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
-        docs = cross_encoder.rank(
-                query,
-                [doc.page_content for doc in docs],
-                top_k=3,
-                return_documents=True,)
-        
-        print(docs)
-        corpus_ids = []
-        for doc in docs:
-            corpus_ids.append(doc["corpus_id"])
-            
-        print("+"*50)
-        print(corpus_ids)
-        print("+"*50)
-
-        rearranged_docs = []
-        for idx, rr_reranked_doc in zip(corpus_ids, docs):
-            result = Document(
-                page_content=rr_reranked_doc["text"],
-                metadata = meta_list[idx]
-            )
-            rearranged_docs.append(result)
-
-        docs = rearranged_docs
-    else: pass
+    docs = re_rank_documents(re_rank, docs, query)
     ############################################################################
 
     question_answering_prompt = ChatPromptTemplate.from_messages(
@@ -175,16 +177,16 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
 
 
 store = {}
-def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=[], multi_q=False):
+def jarvis_rag_with_history(custom_template, model_name, query, temperature, top_k, top_p, history_key, doc=None, re_rank=False, multi_q=False):
     global store
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
+
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    if doc == []:
+    if doc == None:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) 
     else:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}})  
-
     ######## Multi Query ##############################################################
     if multi_q: retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
     else: pass
@@ -193,8 +195,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     logging.basicConfig()
     logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
     ###############################################################################################
-
-
     ### Contextualize question ###
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
     which might reference context in the chat history, formulate a standalone question \
@@ -235,9 +235,16 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         input_messages_key="input",
         history_messages_key="chat_history",
         output_messages_key="answer",)
+    
+    # Retrieve documents
+    retrieved_docs = retriever.invoke(query)
+    print(f"Number of 1st Retrieval Docs: {len(retrieved_docs)}")
+    #### Re-rank documents ########################################################################
+    re_ranked_docs = re_rank_documents(re_rank, retrieved_docs, query)
+    ###############################################################################################
 
     result = conversational_rag_chain.invoke(
-        {"input": query},
+        {"input": query, "retrieved_docs": re_ranked_docs},
         config={
             "configurable": {"session_id": history_key}
             },  
@@ -296,6 +303,7 @@ class RagOllamaRequestHistory(BaseModel):
     top_p: float
     history_key: int
     doc: Optional[list]
+    re_rank: bool
     multi_q: bool
 
 class TTSRequest(BaseModel):
@@ -350,7 +358,7 @@ async def call_jarvis_rag(request: RagOllamaRequest):
 
 @app.post("/call_rag_jarvis_with_history")
 async def call_jarvis_rag_with_history(request: RagOllamaRequestHistory):
-    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc, request.multi_q)
+    res = await async_jarvis_rag_with_history(request.template, request.llm_name, request.input_voice, request.temperature, request.top_k, request.top_p, request.history_key, request.doc, request.re_rank, request.multi_q)
     result = {"output": res}
     json_str = json.dumps(result, indent=4, default=str)
     return Response(content=json_str, media_type='application/json')
