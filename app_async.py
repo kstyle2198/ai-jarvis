@@ -111,8 +111,11 @@ async def call_jarvis(custom_template, llm_name, input_voice):
         async with session.post(url, json={"template": custom_template, "llm_name": llm_name, "input_voice": input_voice}) as response:
             res = await response.json()
     output = res["output"]
-    trans_res = await trans(output)
-    trans_output = trans_res['output'][0]
+    try:
+        trans_res = await trans(output)
+        trans_output = trans_res['output'][0]
+    except:
+        trans_output = "Translation Does Not Work without Internet"
     return output, trans_output
 
 async def call_jarvis_ko(custom_template, llm_name, input_voice):
@@ -142,8 +145,15 @@ async def chat_main(custome_template):
             input_voice = res['input_voice']
             start_time = datetime.now()
             st.session_state.messages.append({"role": "user", "content": input_voice})
+
             if input_voice:
-                output, trans_output = await call_jarvis_ko(custome_template, llm_name, input_voice)
+                start_time = datetime.now()
+                if llm1 == "Ko-Llama3-q4(8B)":  # 한국어 LLM인 경우
+                    output = await call_jarvis_ko(custome_template, llm_name, input_voice)
+                    trans_output = "번역없음"
+                else:
+                    output, trans_output = await call_jarvis(custome_template, llm_name, input_voice)
+
                 st.session_state.output = output
                 st.session_state.trans = trans_output
                 end_time = datetime.now()
@@ -166,7 +176,7 @@ async def chat_main(custome_template):
                     output = await call_jarvis_ko(custome_template, llm_name, input_voice)
                     trans_output = "번역없음"
                 else:
-                    output, trans_output = await call_jarvis(custome_template, llm_name, input_voice)
+                    output, trans_output = await call_jarvis(custome_template, llm_name, input_voice)    
                 st.session_state.output = output
                 st.session_state.trans = trans_output
                 end_time = datetime.now()
@@ -224,36 +234,39 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 ###### [End] VectorDB 함수 ###############################################################################################
 
 #### [Start] RAG_without_History 함수 ####################################################################################    
-async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, re_rank, multi_q):
+async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, compress, re_rank, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "re_rank": re_rank, "multi_q":multi_q}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
    
-async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q):
+async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q):
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis"
-        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
+        res = await api_ollama(url, custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
         retrival_output = res["output"][0]
         output = res["output"][1]
-        trans_res = await trans(output)
-        trans_output = trans_res['output'][0]
+        try:
+            trans_res = await trans(output)
+            trans_output = trans_res['output'][0]
+        except:
+            trans_output = "Translation Does Not Work without Internet"
         return retrival_output, output, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
   
-async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
+async def rag_main(custome_template, doc=None, compress=False, re_rank=False, multi_q=False):
     with st.expander("🧪 Hyper-Parameters"):
         col911, col922, col933 = st.columns(3)
-        with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
-        with col922: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
-        with col933: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.(Original Default: 0.9)")
+        with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, value=0.8, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
+        with col922: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, value=10, help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
+        with col933: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.(Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=1, key="dsssv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
     with st.container():
@@ -276,7 +289,7 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
+                retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -298,7 +311,7 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, re_rank, multi_q)
+            retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -351,41 +364,44 @@ async def rag_main(custome_template, doc=None, re_rank=False, multi_q=False):
 ##### [End] RAG_without_History 함수 ############################################################################
 
 ##### [Start] RAG with History ##########################################################################################
-async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, re_rank, multi_q):
+async def api_ollama_history(url, custome_template, llm_name, input_voice, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc, "re_rank": re_rank, "multi_q":multi_q}) as response:
+            async with session.post(url, json={"template": custome_template, "llm_name": llm_name, "input_voice": input_voice, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": history_key, "doc":doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}) as response:
                 res = await response.json()
         return res
     except Exception as e:
         return f"Error: {str(e)}"
     
 store = {}
-async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q):
+async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q):
     global store
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
-        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
+        res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
         if re_rank: retrival_output = res["output"][0]["retrieved_docs"]
         else:  retrival_output = res["output"][0]["context"]
         output = res["output"][0]["answer"]
         history = res["output"][0]["chat_history"]
-        trans_res = await trans(output)
-        trans_output = trans_res['output'][0]
+        try:
+            trans_res = await trans(output)
+            trans_output = trans_res['output'][0]
+        except:
+            trans_output = "Translation Does Not Work without Internet"
         return retrival_output, output, history, trans_output
     except Exception as e:
         return f"Error: {str(e)}"
     
-async def rag_main_history(custome_template, doc, re_rank=False, multi_q=False):
+async def rag_main_history(custome_template, doc, compress=False, re_rank=False, multi_q=False):
     global store
     with st.expander("🧪 Hyper-Parameters"):
         col9111, col9222, col9333 = st.columns(3)
-        with col9111: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, key="wedsf", help="The temperature of the model. Increasing the temperature will make the model answer more creatively.(Original Default: 0.8)")
-        with col9222: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, key="xvvd", help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
-        with col9333: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, key="qwer", help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. (Original Default: 0.9)")
+        with col9111: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, value=0.8, key="wedsf", help="The temperature of the model. Increasing the temperature will make the model answer more creatively.(Original Default: 0.8)")
+        with col9222: top_k = st.slider("🎲 :blue[Top-K(Proba of Nonsense)]", min_value=0, max_value=100, value=10, key="xvvd", help="Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.(Original Default: 40)")
+        with col9333: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, key="qwer", help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. (Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=0, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=1, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
 
     with st.container():
@@ -414,7 +430,7 @@ async def rag_main_history(custome_template, doc, re_rank=False, multi_q=False):
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             if query:
-                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
+                retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.rag_history = history
@@ -440,7 +456,7 @@ async def rag_main_history(custome_template, doc, re_rank=False, multi_q=False):
             query = text_input
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
-            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, re_rank, multi_q)
+            retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.rag_history = history
@@ -517,11 +533,12 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
-        col71, col72, col73, col74 = st.columns([4, 4, 3, 4])
-        with col71: history_check = st.checkbox("History_Aware", help="If checked, LLM will remember our conversation history")
-        with col72: sel_doc_check = st.checkbox("Specify_Docs", help="If not checked, search every documents. if checked, search only selected documents")
-        with col73: re_rank_check = st.checkbox("Re_Rank", help="Apply Re-Rank")
-        with col74: multi_check = st.checkbox("Multi_Query", help="Apply Multi-Query")
+        col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
+        with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
+        with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
+        with col73: re_rank_check = st.checkbox("Re Rank", help="Apply Re-Rank")
+        with col74: compress_check = st.checkbox("Compress", help="Apply Contextual Compressor")
+        with col75: multi_check = st.checkbox("Multi Q", help="Apply Multi-Query")
         if sel_doc_check:
             with st.expander("📚 Specify the Target Documents", expanded=True):
                 sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
@@ -532,8 +549,8 @@ if __name__ == "__main__":
         try:
             if history_check:
                 store = {}
-                asyncio.run(rag_main_history(custome_template, sel_doc, re_rank_check, multi_check))
-            else: asyncio.run(rag_main(custome_template, sel_doc, re_rank_check, multi_check))
+                asyncio.run(rag_main_history(custome_template, sel_doc, compress_check, re_rank_check, multi_check))
+            else: asyncio.run(rag_main(custome_template, sel_doc, compress_check, re_rank_check, multi_check))
         except:
             st.empty()
 
