@@ -25,8 +25,8 @@ import re
 import ast
 import logging
 
-
 selected_voice = "David"   # David, Hazel
+# selected_voice = "Hazel" 
 language = "en"
 
 # selected_voice = "Heami"   
@@ -86,8 +86,7 @@ def re_rank_documents(re_rank, docs, query):
         meta_list.append(doc.metadata)
     if re_rank:
         model_path = "./models/cross_encoder"
-        cross_encoder = CrossEncoder(model_name=model_path, max_length=512, device="cpu")
-        # cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2", max_length=512, device="cpu")
+        cross_encoder = CrossEncoder(model_name=model_path, max_length=512) # device="cpu"
         docs = cross_encoder.rank(
                 query,
                 [doc.page_content for doc in docs],
@@ -131,7 +130,6 @@ async def jarvis_chat(template, llm_name, input_voice):
 async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, compress=False, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
-
     vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
         retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
@@ -139,28 +137,16 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
         retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}}) 
         # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
-    
     docs = await asyncio.to_thread(retriever.invoke, query)
     print(f"Number of Base Retrieval Docs: {len(docs)}")
-
     #### Multi Query ############################################################################
     if multi_q: 
-        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
         print("proceed Multi-Query")
+        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
     else: pass
-
     logging.basicConfig()
     logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
     ###############################################################################################
-
-    ###### Re Ranking ##############################################################
-    if re_rank: 
-        print("proceed Re-Ranking")
-        docs = re_rank_documents(re_rank, docs, query)
-        print(f"Number of Re-Ranking Retrieval Docs: {len(docs)}")
-    else: pass
-    ############################################################################
-
     ##### Contextual Compressor ##################################################################
     if compress:
         print("proceed Contextual Compressor")
@@ -168,17 +154,21 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
         compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=retriever)
         docs = await asyncio.to_thread(compression_retriever.invoke, query)   # compression_retriever.invoke(query)
         print(f"Number of Contextual Compressor Retrieval Docs: {len(docs)}")
-
     else: pass
     ############################################################################################
-
+    ###### Re Ranking ##############################################################
+    if re_rank: 
+        print("proceed Re-Ranking")
+        docs = re_rank_documents(re_rank, docs, query)
+        print(f"Number of Re-Ranking Retrieval Docs: {len(docs)}")
+    else: pass
+    ############################################################################
     question_answering_prompt = ChatPromptTemplate.from_messages(
                 [("system",
                     custom_template,),
                     MessagesPlaceholder(variable_name="messages"),
                     ])
     document_chain = create_stuff_documents_chain(llm, question_answering_prompt)
-
     result = await asyncio.to_thread(
         document_chain.invoke,
         {
@@ -201,8 +191,8 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None: retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) 
     else: retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}})  
-    docs = retriever.invoke(query)
-    print(f"Number of Base Retrieval Docs: {len(docs)}")
+    retrieved_docs = retriever.invoke(query)
+    print(f"Number of Base Retrieval Docs: {len(retrieved_docs)}")
     ######## Multi Query ##############################################################
     if multi_q: 
         print("proceed Multi Query")
@@ -216,7 +206,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     which might reference context in the chat history, formulate a standalone question \
     which can be understood without the chat history. Do NOT answer the question, \
     just reformulate it if needed and otherwise return it as is."""
-
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", contextualize_q_system_prompt),
@@ -235,7 +224,6 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         ]
         )
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
     ### Statefully manage chat history ###
@@ -251,24 +239,22 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
         history_messages_key="chat_history",
         output_messages_key="answer",)
     
-    #### Retrieve documents #################################################################
-    # retrieved_docs = retriever.invoke(query)
-    #### Re-rank documents ########################################################################
-    if re_rank: 
-        print("proceed Re-Ranking")
-        retrieved_docs = re_rank_documents(re_rank, docs, query)
-    else: pass
-    ###############################################################################################
-
     ##### Contextual Compressor ##################################################################
     if compress:
         print("proceed Contextual Compressor")
         compressor = LLMChainExtractor.from_llm(llm)
         compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=retriever)
-        docs = compression_retriever.invoke(query)   
+        retrieved_docs = compression_retriever.invoke(query)   
         print(f"Number of Contextual Compressor Retrieval Docs: {len(retrieved_docs)}")
     else: pass
     ############################################################################################
+
+    #### Re-rank documents ########################################################################
+    if re_rank: 
+        print("proceed Re-Ranking")
+        retrieved_docs = re_rank_documents(re_rank, retrieved_docs, query)
+    else: pass
+    ###############################################################################################
 
     result = conversational_rag_chain.invoke(
         {"input": query, "retrieved_docs": retrieved_docs},
