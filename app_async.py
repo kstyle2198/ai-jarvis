@@ -259,7 +259,7 @@ async def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, c
     except Exception as e:
         return f"Error: {str(e)}"
   
-async def rag_main(custome_template, doc=None, compress=False, re_rank=False, multi_q=False):
+async def rag_main(custome_template, doc=None, compress=False, re_rank=False, multi_q=False, TTS=False):
     with st.expander("🧪 Hyper-Parameters"):
         col911, col922, col933 = st.columns(3)
         with col911: temp = st.slider("🌡️ :blue[Temperature]", min_value=0.0, max_value=2.0, value=0.8, help="The temperature of the model. Increasing the temperature will make the model answer more creatively(Original Default: 0.8)")
@@ -304,8 +304,9 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
-                if st.session_state.rag_output:
+                if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
+                else: pass
 
         elif rag_btn and text_input:
             start_time = datetime.now()
@@ -326,8 +327,9 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             with col112: st.write(st.session_state.trans)
             
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
-            if st.session_state.rag_output:
+            if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
+            else: pass
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
@@ -401,7 +403,7 @@ async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, 
     except Exception as e:
         return f"Error: {str(e)}"
     
-async def rag_main_history(custome_template, doc, compress=False, re_rank=False, multi_q=False):
+async def rag_main_history(custome_template, doc, compress=False, re_rank=False, multi_q=False, TTS=False):
     global store
     with st.expander("🧪 Hyper-Parameters"):
         col9111, col9222, col9333 = st.columns(3)
@@ -457,8 +459,9 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
 
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
 
-                if st.session_state.rag_output:
+                if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
+                else: pass
 
         elif rag_btn and text_input:
             start_time = datetime.now()
@@ -481,8 +484,10 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
                 st.write(st.session_state.rag_history)
 
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
-            if st.session_state.rag_output:
+
+            if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
+            else: pass
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
@@ -552,6 +557,7 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
+        TTS_check = st.radio(options=["On", "Off"], label="Apply TTS(Text to Speek)")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
         with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
         with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
@@ -568,8 +574,8 @@ if __name__ == "__main__":
         try:
             if history_check:
                 store = {}
-                asyncio.run(rag_main_history(custome_template, sel_doc, compress_check, re_rank_check, multi_check))
-            else: asyncio.run(rag_main(custome_template, sel_doc, compress_check, re_rank_check, multi_check))
+                asyncio.run(rag_main_history(custome_template, sel_doc, compress_check, re_rank_check, multi_check, TTS_check))
+            else: asyncio.run(rag_main(custome_template, sel_doc, compress_check, re_rank_check, multi_check, TTS_check))
         except:
             st.empty()
 
@@ -621,27 +627,29 @@ if __name__ == "__main__":
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
             except:
                 st.success("There is no selected file")
+        try:
+            df = cv.view_collections("vector_index")
+            df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
+            doc_list = df["title"].unique().tolist()
+            st.session_state.doc_list = sorted(doc_list)
 
-        df = cv.view_collections("vector_index")
-        df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
-        doc_list = df["title"].unique().tolist()
-        st.session_state.doc_list = sorted(doc_list)
+            with st.expander("📋 Document List"):
+                for doc in st.session_state.doc_list:
+                    st.markdown(f"- {doc}")
 
-        with st.expander("📋 Document List"):
-            for doc in st.session_state.doc_list:
-                st.markdown(f"- {doc}")
+            with st.expander("🔎 Retrieval Test (Similarity Search)"):
+                embed_model = OllamaEmbeddings(model="nomic-embed-text")
+                vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
+                my_query = st.text_input("✏️ text input", key="qwqqq", placeholder="Input your target senetences for similarity search")
+                with st.spinner("Processing..."):
+                    if st.button("Similarity Search"):
+                        st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
+                st.session_state.retrievals
 
-        with st.expander("🔎 Retrieval Test (Similarity Search)"):
-            embed_model = OllamaEmbeddings(model="nomic-embed-text")
-            vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-            my_query = st.text_input("✏️ text input", key="qwqqq", placeholder="Input your target senetences for similarity search")
-            with st.spinner("Processing..."):
-                if st.button("Similarity Search"):
-                    st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
-            st.session_state.retrievals
-
-        st.markdown(f"**Dataframe Shape: {df.shape}**")
-        st.dataframe(df, use_container_width=True)
+            st.markdown(f"**Dataframe Shape: {df.shape}**")
+            st.dataframe(df, use_container_width=True)
+        except:
+            st.info("There is no VectorStore")
 
     with tab4:
         st.warning("Under Construction")
