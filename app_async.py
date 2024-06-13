@@ -554,16 +554,28 @@ if __name__ == "__main__":
         except:
             st.empty()
 
+    from docx2pdf import convert  # 첨부파일이 word이면.. pdf로 변환
+    import pythoncom
+    pythoncom.CoInitialize()
+
+
     with tab3:
         with st.expander("🧩 Custom Parsing & VectorStore(DB)"):
             uploaded_file = st.file_uploader("📎Upload your file")
             if uploaded_file:
                 temp_dir = base_dir   # tempfile.mkdtemp()  --->  import tempfile 필요, 임시저장디렉토리 자동지정함
                 path = os.path.join(temp_dir, uploaded_file.name)
+                path
+            
+            if st.button("Save", type='secondary', help="첨부파일이 word(.docx)인 경우, pdf로 변환하여 저장함"):
                 with open(path, "wb") as f:
                     f.write(uploaded_file.getvalue())
-            
-            if st.button("Save", type='secondary'):
+                
+                if path.split(".")[-1] == "docx":  # 첨부파일이 word면 pdf로 변환후 저장
+                    new_path = path.split(".")[:-1]
+                    new_path = new_path[0]+".pdf"
+                    new_path
+                    convert(path, new_path)
                 st.markdown(f"path: {path}")
                 st.info("Saving a file is completed")
             else: st.empty()

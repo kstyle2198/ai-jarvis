@@ -1,0 +1,42 @@
+<<설치관련 장애해결>>
+1) 라이브러리 설치 차단 해결 - ITSM 듀온 업무영역 허용 윤서연 매니저 (현대정보시스템) 충돌 사이트 정보 https://files.pythonhosted.org/packages/
+2) 올라마 모델 다운로드 안되는 문제..--> ITSM 듀온 업무영역 허용 (윤서연 매니저)   충돌 시스템 사이트 정보 : https://registry.ollama.ai
+3) 허깅페이스 사이트 접속 차단 - 이덕영 선임(URL인증서 예외- SSL/TLS 바이패스 적용)이 해결 / 충돌 시스템 사이트 정보 : SSLError, huggingface.co 
+
+<<Manual>>
+1. 파이썬 설치  3.10.11
+2. vs code 설치
+3. ollama 설치
+   - model pull: llama3:latest, gemma:2b, phi3:latest, nomic-embed-text
+4. huggingface model 다운로드
+   - cross-encoder/ms-marco-TinyBERT-L-2
+5. 가상환경 생성 및 라이브러리 설치
+    	pip install RealTimeTTS
+	pip install RealTimeSTT
+	pip install langchain
+	pip install fastapi
+	pip install uvicorn
+	pip install streamlit
+	pip install pypdf2     
+	pip install pdfplumber
+
+<<윈도우 시스템 목소리 추가>>
+설정 - 시간 및 언어 - 언어 추가 - 영국 선택 - 설치 - 언어옵션에서 언어팩 다운로드
+설정 - 날짜 및 시간 - 음성 - 음성추가 - 영국 선택
+
+<<RAG 버튼 간단 설명>>
+* 권장 조합 : Select Docs + Re-rank or + Compress
+  (re-rank와 compress 동시 선택 가능.. Multi Q까지 동시 선택 X, 응답시간 과다)
+
+1) History : 모델이 질문 이력을 기억
+    (예시: 1차 질문 what is the noon report? 2차 질문 why is it so important?)
+2) Select Docs : 특정 문서만 골라서 RAG 가능
+3) Re-Rank : 유사도 검색 결과 재정렬
+4) Compress : 유사도 검색결과 압축
+5) Multi Q(uery) : 질문을 여러개로 불려줌 
+    (담당자가 뭘 물어봐야할지 잘 모를때 선택 가능, 
+     반대로 담당자가 정확한 질문을 안다면 오히려 논지를 흐릴 수 있음)
+
+<<Prompt 수정>>
+utils 폴더 내 promts.py 에서 프롬프트 추가/수정 가능 (LLM 역할 정의, 응답길이 등 지정 가능)
+rag_sys_templates 부분

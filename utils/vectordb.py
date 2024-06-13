@@ -7,7 +7,7 @@ import streamlit as st
 
 from pathlib import Path
 parent_dir = Path(__file__).parent.parent
-db_path = str(parent_dir) + "/test_index"  
+db_path = str(parent_dir) + "/vector_index"  
 
 pd.set_option('display.max_columns', 4)
 
@@ -15,10 +15,11 @@ class ChromaViewer():
     def __init__():
         pass
 
-
     def view_collections(db_path):
         client = chromadb.PersistentClient(path=db_path)
+        # print(client.list_collections())
         for collection in client.list_collections():
+            # print(collection)
             data = collection.get(include=['embeddings', 'documents', 'metadatas'])
             df = pd.DataFrame.from_dict(data)
         return df

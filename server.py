@@ -340,7 +340,7 @@ app = FastAPI(
     version="0.0")
 
 ### [Start] Configure logging #######################
-logging.basicConfig(level=logging.INFO, filename='jarvis_log.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, filename='jarvis_log.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 '''
 ** log levels
