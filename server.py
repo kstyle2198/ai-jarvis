@@ -86,7 +86,7 @@ def re_rank_documents(re_rank, docs, query):
         meta_list.append(doc.metadata)
     if re_rank:
         model_path = "./models/cross_encoder"
-        cross_encoder = CrossEncoder(model_name=model_path, max_length=512) # device="cpu"
+        cross_encoder = CrossEncoder(model_name=model_path, max_length=512) # device="cpu"  cross-encoder/ms-marco-TinyBERT-L-2
         docs = cross_encoder.rank(
                 query,
                 [doc.page_content for doc in docs],
