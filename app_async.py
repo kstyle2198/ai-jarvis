@@ -9,6 +9,7 @@ from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from pathlib import Path
 import os
+import pandas as pd
 
 if "center" not in st.session_state:
     layout = "centered"
@@ -319,7 +320,6 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
             delta = calculate_time_delta(start_time, end_time)
             st.warning(f"⏱️ TimeDelta(Sec) : {delta}")
-            st.session_state.rag_doc
 
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.rag_output)
@@ -331,7 +331,6 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
-
     with st.expander("Retrieval Documents(Metadata) & Images"):
         meta_list = []
         img_dict = dict()
@@ -355,6 +354,16 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
                 st.image(path, caption=path)
+
+    ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
+    with st.expander("Save Response Results(CSV file)"):
+        df = pd.DataFrame(st.session_state.rag_reversed_messages)
+        st.dataframe(df.head(), use_container_width=True)
+        file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
+        if st.button("Save"):
+            df.to_csv(f"./results/{file_name}.csv")
+            st.info("File is Saved")
+    ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
 
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
@@ -500,6 +509,16 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
                 st.image(path, caption=path)
+
+    ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
+    with st.expander("Save Response Results(CSV file)"):
+        df = pd.DataFrame(st.session_state.rag_reversed_messages)
+        st.dataframe(df.head(), use_container_width=True)
+        file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
+        if st.button("Save"):
+            df.to_csv(f"./results/{file_name}.csv")
+            st.info("File is Saved")
+    ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
 
     for msg in st.session_state.rag_reversed_messages:
         if msg["role"] == "user":
