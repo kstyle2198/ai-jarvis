@@ -118,10 +118,10 @@ def pdf_to_image(path):
 
 def save_pdf_to_image(pdf_path, prefix):
     pages = pdf_to_image(pdf_path) 
-    folder_path = f"D:/ai_jarvis/pdf_to_images/{prefix}/"
+    folder_path = f"./pdf_to_images/{prefix}/"
     Path(folder_path).mkdir(parents=True, exist_ok=True)     
     for idx, page in enumerate(pages):
-        page.save(f'D:/ai_jarvis/pdf_to_images/{prefix}/{prefix}_{idx}.png', 'PNG')
+        page.save(f'./pdf_to_images/{prefix}/{prefix}_{idx}.png', 'PNG')
 
 class CustomPDFLoader(BaseLoader):
     def __init__(self) -> None:
@@ -162,14 +162,14 @@ class CustomPDFLoader(BaseLoader):
         prefix = pdf_path.split("\\")[-1].split(".")[0].strip()
         save_pdf_to_image(pdf_path, prefix)
 
-        file_list = os.listdir(f"D:/ai_jarvis/pdf_to_images/{prefix}")
+        file_list = os.listdir(f"./pdf_to_images/{prefix}")
         selected_files = [file for file in file_list if file.endswith("png")]
 
         ocr = PaddleOCR(use_angle_cls=True, lang='en')
         full_result = []
         for page_num, img_path in enumerate(selected_files):
             print(img_path)
-            img_path = f"D:/ai_jarvis/pdf_to_images/{prefix}/"+img_path
+            img_path = f"./pdf_to_images/{prefix}/"+img_path
             result = ocr.ocr(img_path)
             for idx in range(len(result)):
                 res = result[idx]
@@ -197,35 +197,6 @@ if __name__ == "__main__":
     prefix = "FWG"
     result = cpl.ocr_parsing(pdf_path, prefix)
     print(result)
-
-
-    # from PIL import Image
-    # pages = pdf_to_image("../data/FWG.pdf")
-    # for idx, page in enumerate(pages):
-    #     print(page)
-    #     # Save the image as a PNG file
-    #     page.save(f'../pdf_to_images/FWG/path_to_save_image_{idx}.png', 'PNG')
-    
-    # file_list = os.listdir("../pdf_to_images/FWG")
-    # selected_files = [file for file in file_list if file.endswith("png")]
-    # print(selected_files)
-
-    # from paddleocr import PaddleOCR
-    # ocr = PaddleOCR(use_angle_cls=True, lang='en')
-    # # for img_path  in selected_files:
-    # img_path = "D:/ai_jarvis/pdf_to_images/FWG/path_to_save_image_2.png"
-    # result = ocr.ocr(img_path)
-    # # print(result)
-    # for idx in range(len(result)):
-    #     res = result[idx]
-    #     texts = []
-    #     for line in res:
-    #         print(line)
-    #         print(line[1][0])
-    #         texts.append(line[1][0])
-    #     resulting_string = " ".join(texts)
-    #     print(resulting_string)
-    #     break
 
 
    
