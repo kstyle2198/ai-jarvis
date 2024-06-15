@@ -1,7 +1,7 @@
 <<설치관련 장애해결>>
 1) 라이브러리 설치 차단 해결 - ITSM 듀온 업무영역 허용 윤서연 매니저 (현대정보시스템) 충돌 사이트 정보 https://files.pythonhosted.org/packages/
 2) 올라마 모델 다운로드 안되는 문제..--> ITSM 듀온 업무영역 허용 (윤서연 매니저)   충돌 시스템 사이트 정보 : https://registry.ollama.ai
-3) 허깅페이스 사이트 접속 차단 - 이덕영 선임(URL인증서 예외- SSL/TLS 바이패스 적용)이 해결 / 충돌 시스템 사이트 정보 : SSLError, huggingface.co 
+3) 허깅페이스 사이트 접속 차단 - 이상훈 책임(URL인증서 예외- SSL/TLS 바이패스 적용)이 해결 / 충돌 시스템 사이트 정보 : SSLError, huggingface.co 
 
 --> ITSM 듀업 업무영억 허용 신청 (보안서약서 다운, 작성, 첨부)
 
@@ -17,19 +17,33 @@
 3. ollama 설치
    - model pull: llama3:latest, gemma:2b, phi3:latest, nomic-embed-text
 4. huggingface model 다운로드
-   - cross-encoder/ms-marco-TinyBERT-L-2
-5. 가상환경 생성 및 라이브러리 설치
+   - cross-encoder/ms-marco-TinyBERT-L-2   (re-ranking용 모델)
+
+5. 관련 프로그램 설치
+    - visual studio tool --> c++을 사용한 build tool 설치 (https://languagestory.tistory.com/121)
+    - ffmpeg 설치 (https://doa-oh.tistory.com/170)
+
+6. 가상환경 생성 및 라이브러리 설치
     pip install RealTimeTTS
 	pip install RealTimeSTT
 	pip install langchain
 	pip install fastapi
 	pip install uvicorn
 	pip install streamlit
-	pip install pypdf2     
+	pip install pypdf2   
+    pip install Spire.PDF  
+    pip install pymupdf
 	pip install pdfplumber
     pip install docx2pdf
+    pip install sentence-transformers
+    pip install aiogoogletrans
     pip install crewai
+    pip install paddleocr
+    pip install paddlepaddle
+    pip install pdfminer.six
+
     pip install transformers -U
+
 
 <<윈도우 시스템 목소리 추가>>
 설정 - 시간 및 언어 - 언어 추가 - 영국 선택 - 설치 - 언어옵션에서 언어팩 다운로드
@@ -40,6 +54,7 @@
 
 <<실행방법>>
 - 터미널창(CMD) 두개 열고 (화면 상단의 터미널 메뉴 선택후 새터미널 클릭), 아래 명령어 복붙+엔터 
+- 가상환경 들어가기 : (가상환경 이름이 myenv라면..) myenv\scripts\activate
 - 서버실행 : fastapi dev server.py
 - 서비스화면실행 : streamlit run app_async.py
 
@@ -52,7 +67,7 @@
 
 1) History : 모델이 질문 이력을 기억
     (예시: 1차 질문 what is the noon report? 2차 질문 why is it so important?)
-2) Select Docs : 특정 문서만 골라서 RAG 가능 (문서 복수 선태 가능)
+2) Select Docs : 특정 문서만 골라서 RAG 가능 (문서 복수 선택 가능)
 3) Re-Rank : 유사도 검색 결과 재정렬
 4) Compress : 유사도 검색 결과 압축
 5) Multi Q(uery) : 질문을 여러개로 불려줌 

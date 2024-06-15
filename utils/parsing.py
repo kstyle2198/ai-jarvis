@@ -7,15 +7,17 @@ class FileManager():
     def __init__(self):
         pass
 
+    def list_all_files(self, path):
+        file_list = os.listdir(path)
+        selected_files = [file for file in file_list]
+        return selected_files
+
     def list_selected_files(self, path, 확장자):
         file_list = os.listdir(path)
         selected_files = [file for file in file_list if file.endswith(확장자)]
         return selected_files
 
-    def list_all_files(self, path):
-        file_list = os.listdir(path)
-        selected_files = [file for file in file_list]
-        return selected_files
+
 
 import pdfplumber
 from spire.pdf.common import *
@@ -108,6 +110,19 @@ def image_extractor(file_path, page_num, prefix):
     else:
         pass
 
+from paddleocr import PaddleOCR
+from pdf2image import convert_from_path
+def pdf_to_image(path):
+    pages = convert_from_path(path)
+    return pages
+
+def save_pdf_to_image(pdf_path, prefix):
+    pages = pdf_to_image(pdf_path) 
+    folder_path = f"D:/ai_jarvis/pdf_to_images/{prefix}/"
+    Path(folder_path).mkdir(parents=True, exist_ok=True)     
+    for idx, page in enumerate(pages):
+        page.save(f'D:/ai_jarvis/pdf_to_images/{prefix}/{prefix}_{idx}.png', 'PNG')
+
 class CustomPDFLoader(BaseLoader):
     def __init__(self) -> None:
         pass
@@ -115,38 +130,106 @@ class CustomPDFLoader(BaseLoader):
     def lazy_load(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
         full_result = []
         prefix = file_path.split("\\")[-1].split(".")[0].strip()
-        print(prefix)
         with pdfplumber.open(file_path) as pdf1:
             page_number = 0
-            docs_for_color = fitz.open(file_path)
+            # docs_for_color = fitz.open(file_path)
             for _ in pdf1.pages:
                 page_result = block_based_parsing_by_page(file_path, page_number, crop)
                 table_result = table_parser(file_path, page_number, crop)
                 image_files = image_extractor(file_path, page_number, prefix)
 
-                if table_result:
-                    total_pag_result = page_result + "\n\n" + table_result
-                    result = Document(
-                        page_content=total_pag_result,
-                        metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
-                    )
+                if page_result == "":
+                    return False
+            
                 else:
-                    result = Document(
-                        page_content=page_result,
-                        metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
-                    )
-                full_result.append(result)
-                page_number += 1
+                    if table_result:
+                        total_pag_result = page_result + "\n\n" + table_result
+                        result = Document(
+                            page_content=total_pag_result,
+                            metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
+                        )
+                    else:
+                        result = Document(
+                            page_content=page_result,
+                            metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
+                        )
+                    full_result.append(result)
+                    page_number += 1
 
+                return full_result
+
+    def ocr_parsing(self, pdf_path):
+        prefix = pdf_path.split("\\")[-1].split(".")[0].strip()
+        save_pdf_to_image(pdf_path, prefix)
+
+        file_list = os.listdir(f"D:/ai_jarvis/pdf_to_images/{prefix}")
+        selected_files = [file for file in file_list if file.endswith("png")]
+
+        ocr = PaddleOCR(use_angle_cls=True, lang='en')
+        full_result = []
+        for page_num, img_path in enumerate(selected_files):
+            print(img_path)
+            img_path = f"D:/ai_jarvis/pdf_to_images/{prefix}/"+img_path
+            result = ocr.ocr(img_path)
+            for idx in range(len(result)):
+                res = result[idx]
+                texts = []
+                for line in res:
+                    print(line)
+                    print(line[1][0])
+                    texts.append(line[1][0])
+                resulting_string = " ".join(texts)
+
+                result = Document(
+                    page_content=resulting_string,
+                    metadata={"page_number": page_num, "keywords":prefix, "source": pdf_path},
+                )
+            full_result.append(result)
         return full_result
 
-    
+
+
 
 if __name__ == "__main__":
 
-    path = "D:/ai_jarvis/data/FWG.pdf"
-    image_extractor(path, 1, "test")
-    pass
+    cpl = CustomPDFLoader()
+    pdf_path = "D:/ai_jarvis/data/FWG.pdf"
+    prefix = "FWG"
+    result = cpl.ocr_parsing(pdf_path, prefix)
+    print(result)
+
+
+    # from PIL import Image
+    # pages = pdf_to_image("../data/FWG.pdf")
+    # for idx, page in enumerate(pages):
+    #     print(page)
+    #     # Save the image as a PNG file
+    #     page.save(f'../pdf_to_images/FWG/path_to_save_image_{idx}.png', 'PNG')
+    
+    # file_list = os.listdir("../pdf_to_images/FWG")
+    # selected_files = [file for file in file_list if file.endswith("png")]
+    # print(selected_files)
+
+    # from paddleocr import PaddleOCR
+    # ocr = PaddleOCR(use_angle_cls=True, lang='en')
+    # # for img_path  in selected_files:
+    # img_path = "D:/ai_jarvis/pdf_to_images/FWG/path_to_save_image_2.png"
+    # result = ocr.ocr(img_path)
+    # # print(result)
+    # for idx in range(len(result)):
+    #     res = result[idx]
+    #     texts = []
+    #     for line in res:
+    #         print(line)
+    #         print(line[1][0])
+    #         texts.append(line[1][0])
+    #     resulting_string = " ".join(texts)
+    #     print(resulting_string)
+    #     break
+
+
+   
+
 
 
 

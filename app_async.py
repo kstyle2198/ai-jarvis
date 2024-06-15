@@ -7,6 +7,8 @@ from utils import CustomPDFLoader, ChromaViewer, CustomPrompts
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain.retrievers import ParentDocumentRetriever
+from langchain.storage import InMemoryStore
 from pathlib import Path
 import os
 import pandas as pd
@@ -78,7 +80,6 @@ async def trans(txt):
 
 import re
 import ast
-
 def extract_metadata(input_string):  # retrieval docs re-ranking and add metadata
     # Use regex to extract the page_content
     page_content_match = re.search(r"page_content='(.+?)'\s+metadata=", input_string, re.DOTALL)
@@ -232,6 +233,8 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
         if st.session_state.retirever: 
             st.session_state.retirever
             st.info("VectorStore is Updated")
+
+
 ###### [End] VectorDB 함수 ###############################################################################################
 
 #### [Start] RAG_without_History 함수 ####################################################################################    
@@ -557,7 +560,7 @@ if __name__ == "__main__":
         asyncio.run(chat_main(custome_template))
 
     with tab2:
-        TTS_check = st.radio(options=["On", "Off"], label="Apply TTS(Text to Speek)")
+        TTS_check = st.checkbox("Apply TTS(Text to Speek)")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
         with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
         with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
@@ -620,8 +623,12 @@ if __name__ == "__main__":
                     if st.button("Parsing"):
                         st.session_state.pages = ""
                         st.session_state.pages = custom_loader.lazy_load(st.session_state.path, crop_check)
+                        if st.session_state.pages == False:
+                            st.info("Proceed Image Parsing")
+                            st.session_state.pages = custom_loader.ocr_parsing(st.session_state.path)
                         st.info("Parsing is Completed")
                 st.session_state.pages
+
 
                 if st.session_state.pages:
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
