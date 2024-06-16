@@ -3,7 +3,7 @@ import aiohttp
 import streamlit as st
 from datetime import datetime
 import time
-from utils import CustomPDFLoader, ChromaViewer, CustomPrompts
+from utils import CustomPdfParser, ChromaViewer, CustomPrompts
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -224,7 +224,7 @@ if "path" not in st.session_state:
 if "doc_list" not in st.session_state:
     st.session_state.doc_list = []
 
-custom_loader = CustomPDFLoader()
+custom_parser = CustomPdfParser()
 cv = ChromaViewer
 
 def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorDB생성 및 저장
@@ -627,10 +627,10 @@ if __name__ == "__main__":
                 with st.spinner("processing.."):
                     if st.button("Parsing"):
                         st.session_state.pages = ""
-                        st.session_state.pages = custom_loader.pdf_parsing(st.session_state.path, crop_check)
+                        st.session_state.pages = custom_parser.pdf_parsing(st.session_state.path, crop_check)
                         if st.session_state.pages == False:
                             st.info("Proceed Image Parsing")
-                            st.session_state.pages = custom_loader.ocr_parsing(st.session_state.path)
+                            st.session_state.pages = custom_parser.ocr_parsing(st.session_state.path)
                         st.info("Parsing is Completed")
                 st.session_state.pages
 

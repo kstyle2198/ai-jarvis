@@ -118,7 +118,7 @@ def save_pdf_to_image(pdf_path, prefix):
 ##### [End] OCR helper function ######################################################
 
 ###  [Start Main Class] ############################################################3
-class CustomPDFLoader(BaseLoader):
+class CustomPdfParser(BaseLoader):
     def __init__(self) -> None:
         pass
     def pdf_parsing(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
