@@ -15,7 +15,7 @@ class ChromaViewer():
     def __init__():
         pass
 
-    def view_collections(db_path):
+    def view_collections(db_path): # db를 df로 보여주기 위한 함수
         client = chromadb.PersistentClient(path=db_path)
         # print(client.list_collections())
         for collection in client.list_collections():

@@ -1,10 +1,8 @@
-
-
 class CustomPrompts:
     def __init__(self):
         pass
 
-    def custom_template(self):
+    def custom_template(self):  # Open Chat prompt
         custom_templates = {
         "AI_CoPilot": '''you are an smart AI assistant in a commercial vessel like LNG Carriers or Container Carriers.
 your answer always starts with "OK, Captain".
@@ -23,7 +21,7 @@ if there are not some syntex errors in query, generated the corrected expression
         "Food_Teller": "Not prepared yet"}
         return custom_templates
     
-    def rag_sys_template(self):
+    def rag_sys_template(self):  # RAG prompt
         rag_sys_templates = {
 'Common_Engineer' :"""You are a smart AI engineering advisor in Commercial Vessel like LNG Carrier.
 your answer always starts with "OK, Captain".

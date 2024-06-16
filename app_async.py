@@ -128,7 +128,7 @@ async def call_jarvis_ko(custom_template, llm_name, input_voice):
     output = res["output"]
     return output
 
-async def chat_main(custome_template):
+async def chat_main(custome_template, tts_check=False):
     with st.container():
         llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Ko-Llama3-q4(8B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
@@ -166,8 +166,10 @@ async def chat_main(custome_template):
                     with col111: st.write(st.session_state.output)
                     with col112: st.write(st.session_state.trans)
                 st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
-                if st.session_state.output:
+                if st.session_state.output and tts_check:
                     await tts(st.session_state.output)
+                else: pass
+
         elif call_btn and text_input:
             start_time = datetime.now()
             input_voice = text_input
@@ -189,9 +191,11 @@ async def chat_main(custome_template):
                     with col111: st.write(st.session_state.output)
                     with col112: st.write(st.session_state.trans)
                 st.session_state.messages.append({"role": "assistant", "content": st.session_state.output})
-                if st.session_state.output:
+                if st.session_state.output and tts_check:
                     await tts(st.session_state.output)
-                text_input = ""
+                else: pass
+
+                # text_input = ""
     st.markdown("---")
     st.session_state.reversed_messages = st.session_state.messages[::-1]
     for msg in st.session_state.reversed_messages:
@@ -543,8 +547,8 @@ rag_sys_templates = cp.rag_sys_template()
 
 if __name__ == "__main__":
     st.title("⚓ AI Jarvis")
-    st.checkbox("Wide Layout", key="center", value=st.session_state.get("center", False))
-    with st.expander("🚢 Note"):
+    st.checkbox("🐬 Wide Layout", key="center", value=st.session_state.get("center", False))
+    with st.expander("🧭 **Note**"):
         st.markdown("""
                     - This AI app is created for :green[**Local Chatbot and RAG Service using sLLM without Internet**].
                     - :orange[**Chatbot**] is for Common Conversations regarding any interests like techs, movies, etc.
@@ -554,13 +558,14 @@ if __name__ == "__main__":
     tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
 
     with tab1:
+        tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
         with st.expander("✔️ Select Prompt Concept", expanded=False):
             sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "한글_테스트", "English_Teacher", "Movie_Teller", "Food_Teller"], help="Define the roll of LLM")
             custome_template = st.text_area("📒 Template", custom_templates[sel_template], height=200)
-        asyncio.run(chat_main(custome_template))
+        asyncio.run(chat_main(custome_template, tts_check1))
 
     with tab2:
-        TTS_check = st.checkbox("Apply TTS(Text to Speek)")
+        TTS_check = st.checkbox("📢 Apply TTS(Text to Speek)", key="wreq", help="LLM reads the Response")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
         with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
         with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
@@ -622,13 +627,12 @@ if __name__ == "__main__":
                 with st.spinner("processing.."):
                     if st.button("Parsing"):
                         st.session_state.pages = ""
-                        st.session_state.pages = custom_loader.lazy_load(st.session_state.path, crop_check)
+                        st.session_state.pages = custom_loader.pdf_parsing(st.session_state.path, crop_check)
                         if st.session_state.pages == False:
                             st.info("Proceed Image Parsing")
                             st.session_state.pages = custom_loader.ocr_parsing(st.session_state.path)
                         st.info("Parsing is Completed")
                 st.session_state.pages
-
 
                 if st.session_state.pages:
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
@@ -641,8 +645,9 @@ if __name__ == "__main__":
             st.session_state.doc_list = sorted(doc_list)
 
             with st.expander("📋 Document List"):
-                for doc in st.session_state.doc_list:
-                    st.markdown(f"- {doc}")
+                with st.container(height=200):
+                    for doc in st.session_state.doc_list:
+                        st.markdown(f"- {doc}")
 
             with st.expander("🔎 Retrieval Test (Similarity Search)"):
                 embed_model = OllamaEmbeddings(model="nomic-embed-text")

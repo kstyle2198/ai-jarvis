@@ -1,24 +1,5 @@
-import streamlit as st
 import os
 from pathlib import Path
-
-@st.experimental_fragment
-class FileManager():
-    def __init__(self):
-        pass
-
-    def list_all_files(self, path):
-        file_list = os.listdir(path)
-        selected_files = [file for file in file_list]
-        return selected_files
-
-    def list_selected_files(self, path, 확장자):
-        file_list = os.listdir(path)
-        selected_files = [file for file in file_list if file.endswith(확장자)]
-        return selected_files
-
-
-
 import pdfplumber
 from spire.pdf.common import *
 from spire.pdf import *
@@ -28,7 +9,26 @@ from langchain_core.documents import Document
 from pathlib import Path
 import fitz
 
-def block_based_parsing_by_page(pdf_path, page_num, crop:bool):
+'''
+상단은 헬퍼 함수.. 메인 클레스는 맨 하단의 CustomPDFLoader임
+'''
+
+#### [Start] File handler class ########################################
+class FileManager():
+    def __init__(self):
+        pass
+    def list_all_files(self, path):
+        file_list = os.listdir(path)
+        selected_files = [file for file in file_list]
+        return selected_files
+    def list_selected_files(self, path, 확장자):
+        file_list = os.listdir(path)
+        selected_files = [file for file in file_list if file.endswith(확장자)]
+        return selected_files
+#### [Start] File handler class ########################################
+
+#### [Start] PDF parsing help function ############################################3
+def block_based_parsing_by_page(pdf_path, page_num, crop:bool):  # 텍스트 파싱 (크롭 적용)
     results = ""
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_num]
@@ -43,7 +43,6 @@ def block_based_parsing_by_page(pdf_path, page_num, crop:bool):
             if line_top not in lines:
                 lines[line_top] = []
             lines[line_top].append(word['text'])
-        
         # Sort and print lines based on their y-coordinate
         for top in sorted(lines.keys()):
             result = ""
@@ -53,9 +52,8 @@ def block_based_parsing_by_page(pdf_path, page_num, crop:bool):
             results = results + "\n" + result
     return results
 
-def table_parser(pdf_path, page_num, crop):
+def table_parser(pdf_path, page_num, crop):   # 테이블을 마크다운 형식으로 파싱
     full_result = []
-    
     pdf = pdfplumber.open(pdf_path)
     # Find the examined page
     table_page = pdf.pages[page_num]
@@ -80,10 +78,7 @@ def table_parser(pdf_path, page_num, crop):
         full_result.append(table_string)
         return table_string
 
-import fitz
-import os
-
-def image_extractor(file_path, page_num, prefix):
+def image_extractor(file_path, page_num, prefix):   # 추출 이미지 파일 따로 저장하기
     images_path = f"./images/{prefix}/"
     Path(images_path).mkdir(parents=True, exist_ok=True)
     pdf_file = fitz.open(file_path)
@@ -109,25 +104,24 @@ def image_extractor(file_path, page_num, prefix):
                 image_file.close()
     else:
         pass
+#### [End] PDF parsing help function ############################################3
 
+##### [Start] OCR helper function ######################################################
 from paddleocr import PaddleOCR
 from pdf2image import convert_from_path
-def pdf_to_image(path):
-    pages = convert_from_path(path)
-    return pages
-
 def save_pdf_to_image(pdf_path, prefix):
-    pages = pdf_to_image(pdf_path) 
+    pages = convert_from_path(pdf_path) 
     folder_path = f"./pdf_to_images/{prefix}/"
     Path(folder_path).mkdir(parents=True, exist_ok=True)     
     for idx, page in enumerate(pages):
         page.save(f'./pdf_to_images/{prefix}/{prefix}_{idx}.png', 'PNG')
+##### [End] OCR helper function ######################################################
 
+###  [Start Main Class] ############################################################3
 class CustomPDFLoader(BaseLoader):
     def __init__(self) -> None:
         pass
-
-    def lazy_load(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
+    def pdf_parsing(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
         full_result = []
         prefix = file_path.split("\\")[-1].split(".")[0].strip()
         with pdfplumber.open(file_path) as pdf1:
@@ -137,10 +131,8 @@ class CustomPDFLoader(BaseLoader):
                 page_result = block_based_parsing_by_page(file_path, page_number, crop)
                 table_result = table_parser(file_path, page_number, crop)
                 image_files = image_extractor(file_path, page_number, prefix)
-
                 if page_result == "":
                     return False
-            
                 else:
                     if table_result:
                         total_pag_result = page_result + "\n\n" + table_result
@@ -159,9 +151,11 @@ class CustomPDFLoader(BaseLoader):
                 return full_result
 
     def ocr_parsing(self, pdf_path):
+        '''
+        ocr parsing은 table markdown 미포함 (깡통 파싱)
+        '''
         prefix = pdf_path.split("\\")[-1].split(".")[0].strip()
         save_pdf_to_image(pdf_path, prefix)
-
         file_list = os.listdir(f"./pdf_to_images/{prefix}")
         selected_files = [file for file in file_list if file.endswith("png")]
 
@@ -179,16 +173,13 @@ class CustomPDFLoader(BaseLoader):
                     print(line[1][0])
                     texts.append(line[1][0])
                 resulting_string = " ".join(texts)
-
                 result = Document(
                     page_content=resulting_string,
                     metadata={"page_number": page_num, "keywords":prefix, "source": pdf_path},
                 )
             full_result.append(result)
         return full_result
-
-
-
+###  [End Main Class] ############################################################3
 
 if __name__ == "__main__":
 

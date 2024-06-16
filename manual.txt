@@ -41,7 +41,6 @@
     pip install paddleocr
     pip install paddlepaddle
     pip install pdfminer.six
-
     pip install transformers -U
 
 
