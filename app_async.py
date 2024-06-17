@@ -642,6 +642,9 @@ if __name__ == "__main__":
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
             except:
                 st.success("There is no selected file")
+
+
+
         try:
             df = cv.view_collections("vector_index")
             df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
@@ -662,10 +665,25 @@ if __name__ == "__main__":
                         st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
                 st.session_state.retrievals
 
-            st.markdown(f"**Dataframe Shape: {df.shape}**")
-            st.dataframe(df, use_container_width=True)
+            with st.expander(f"**Dataframe Shape: {df.shape}**"):
+                st.dataframe(df, use_container_width=True)
         except:
             st.info("There is no VectorStore")
+
+
+        st.markdown("---")
+        st.subheader("Delete Embeded Documents")
+        delete_doc = st.selectbox("Target Document Name", st.session_state.doc_list, index=None)
+        # delete_doc
+        try:
+            del_ids = vectordb.get(where={'keywords':delete_doc})["ids"]
+            # del_ids
+
+            if st.button("Delete All Ids"):
+                vectordb.delete(del_ids)
+                st.info("All Selected Ids were Deleted")
+        except:
+            st.empty()
 
     with tab4:
         st.warning("Under Construction")
