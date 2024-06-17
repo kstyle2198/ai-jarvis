@@ -10,6 +10,7 @@
 - models - cross_encoder
 - utils
 - results
+- pdf_to_images
 
 <<설치 Manual>>
 1. 파이썬 설치  3.10.11
@@ -22,6 +23,7 @@
 5. 관련 프로그램 설치
     - visual studio tool --> c++을 사용한 build tool 설치 (https://languagestory.tistory.com/121)
     - ffmpeg 설치 (https://doa-oh.tistory.com/170)
+    - poppler 설치 (https://velog.io/@tett_77/pdf2image.exceptions.PDFInfoNotInstalledError-Unable-to-get-page-count.-Is-poppler-installed-and-in-PATH)
 
 6. 가상환경 생성 및 라이브러리 설치
     pip install RealTimeTTS
@@ -38,6 +40,7 @@
     pip install sentence-transformers
     pip install aiogoogletrans
     pip install crewai
+    pip install pdf2image
     pip install paddleocr
     pip install paddlepaddle
     pip install pdfminer.six

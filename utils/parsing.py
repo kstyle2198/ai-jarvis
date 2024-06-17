@@ -48,7 +48,6 @@ def block_based_parsing_by_page(pdf_path, page_num, crop:bool):  # 텍스트 파
             result = ""
             if len(lines[top]) > 1:
                 result = ' '.join(lines[top])
-                # print(result)
             results = results + "\n" + result
     return results
 
@@ -123,32 +122,34 @@ class CustomPdfParser(BaseLoader):
         pass
     def pdf_parsing(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
         full_result = []
+        status = False
         prefix = file_path.split("\\")[-1].split(".")[0].strip()
         with pdfplumber.open(file_path) as pdf1:
             page_number = 0
-            # docs_for_color = fitz.open(file_path)
             for _ in pdf1.pages:
                 page_result = block_based_parsing_by_page(file_path, page_number, crop)
                 table_result = table_parser(file_path, page_number, crop)
                 image_files = image_extractor(file_path, page_number, prefix)
-                if page_result == "":
-                    return False
-                else:
-                    if table_result:
-                        total_pag_result = page_result + "\n\n" + table_result
-                        result = Document(
-                            page_content=total_pag_result,
-                            metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
-                        )
-                    else:
-                        result = Document(
-                            page_content=page_result,
-                            metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
-                        )
-                    full_result.append(result)
-                    page_number += 1
+                print(page_result)
 
-                return full_result
+                if page_result:  # page contents 없는 깡통 PDF 체크
+                    status = True
+                else: pass
+                if table_result:
+                    total_pag_result = page_result + "\n\n" + table_result
+                    result = Document(
+                        page_content=total_pag_result,
+                        metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
+                    )
+                else:
+                    result = Document(
+                        page_content=page_result,
+                        metadata={"page_number": page_number, "keywords":prefix, "source": file_path},
+                    )
+                full_result.append(result)
+                page_number += 1
+
+            return status, full_result
 
     def ocr_parsing(self, pdf_path):
         '''
@@ -183,7 +184,7 @@ class CustomPdfParser(BaseLoader):
 
 if __name__ == "__main__":
 
-    cpl = CustomPDFLoader()
+    cpl = CustomPdfParser()
     pdf_path = "D:/ai_jarvis/data/FWG.pdf"
     prefix = "FWG"
     result = cpl.ocr_parsing(pdf_path, prefix)

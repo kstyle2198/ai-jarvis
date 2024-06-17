@@ -545,6 +545,8 @@ custom_templates = cp.custom_template()
 rag_sys_templates = cp.rag_sys_template()
 ######## [End] Templates ###################################################################################
 
+
+
 if __name__ == "__main__":
     st.title("⚓ AI Jarvis")
     st.checkbox("🐬 Wide Layout", key="center", value=st.session_state.get("center", False))
@@ -625,13 +627,15 @@ if __name__ == "__main__":
                 with col33: chunk_overlap = st.slider("⚗️ Chunk_Overlap", min_value=200, max_value=1000, step=50)
                 
                 with st.spinner("processing.."):
-                    if st.button("Parsing"):
+                    if st.button("PDF Parsing"):
                         st.session_state.pages = ""
-                        st.session_state.pages = custom_parser.pdf_parsing(st.session_state.path, crop_check)
-                        if st.session_state.pages == False:
-                            st.info("Proceed Image Parsing")
+                        status, temp_pages = custom_parser.pdf_parsing(st.session_state.path, crop_check)
+                        status
+                        if status:
+                            st.session_state.pages = temp_pages
+                        else:  # 깡통 PDF인 경우, OCR 파싱 적용
                             st.session_state.pages = custom_parser.ocr_parsing(st.session_state.path)
-                        st.info("Parsing is Completed")
+                st.info("Parsing is Completed")
                 st.session_state.pages
 
                 if st.session_state.pages:
