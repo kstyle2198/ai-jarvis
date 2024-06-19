@@ -238,6 +238,14 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
             st.session_state.retirever
             st.info("VectorStore is Updated")
 
+# from langchain_community.retrievers import BM25Retriever
+# def create_bm25(parsed_text, chunk_size=1000, chunk_overlap=200):
+#     with st.spinner("Processing..."):
+#         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+#         splitted_texts = text_splitter.split_documents(parsed_text)
+#         embed_model = OllamaEmbeddings(model="nomic-embed-text")
+#         db = BM25Retriever.from_documents(splitted_texts)
+
 
 ###### [End] VectorDB 함수 ###############################################################################################
 
@@ -557,16 +565,18 @@ if __name__ == "__main__":
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** using VectorStore (embedding your PDFs)
                     - In the Dev mode, Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
+        
     tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
 
-    with tab1:
+    with tab1:  # Chatbot
         tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
         with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "한글_테스트", "English_Teacher", "Movie_Teller", "Food_Teller"], help="Define the roll of LLM")
+            sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "Medical Assistant", "한글_테스트", "English_Teacher"], help="Define the roll of LLM")
             custome_template = st.text_area("📒 Template", custom_templates[sel_template], height=200)
         asyncio.run(chat_main(custome_template, tts_check1))
 
-    with tab2:
+
+    with tab2:   # RAG
         TTS_check = st.checkbox("📢 Apply TTS(Text to Speek)", key="wreq", help="LLM reads the Response")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
         with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
@@ -590,11 +600,10 @@ if __name__ == "__main__":
             st.empty()
 
     from docx2pdf import convert  # 첨부파일이 word이면.. pdf로 변환
-    import pythoncom
-    pythoncom.CoInitialize()
+    import pythoncom   ## window에서만 설정 필요
+    pythoncom.CoInitialize()   ## window에서만 설정 필요
 
-
-    with tab3:
+    with tab3:   # VectorStore
         with st.expander("🧩 Custom Parsing & VectorStore(DB)"):
             uploaded_file = st.file_uploader("📎Upload your file")
             if uploaded_file:
@@ -643,15 +652,13 @@ if __name__ == "__main__":
             except:
                 st.success("There is no selected file")
 
-
-
         try:
             df = cv.view_collections("vector_index")
             df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
             doc_list = df["title"].unique().tolist()
             st.session_state.doc_list = sorted(doc_list)
 
-            with st.expander("📋 Document List"):
+            with st.expander(f"📋 Document List ({len(st.session_state.doc_list)})"):
                 with st.container(height=200):
                     for doc in st.session_state.doc_list:
                         st.markdown(f"- {doc}")
@@ -670,10 +677,9 @@ if __name__ == "__main__":
         except:
             st.info("There is no VectorStore")
 
-
         st.markdown("---")
         st.subheader("Delete Embeded Documents")
-        delete_doc = st.selectbox("Target Document Name", st.session_state.doc_list, index=None)
+        delete_doc = st.selectbox("Target Document", st.session_state.doc_list, index=None)
         # delete_doc
         try:
             del_ids = vectordb.get(where={'keywords':delete_doc})["ids"]
@@ -685,7 +691,7 @@ if __name__ == "__main__":
         except:
             st.empty()
 
-    with tab4:
+    with tab4:   # Prompt Engineering
         st.warning("Under Construction")
         st.empty()
         
