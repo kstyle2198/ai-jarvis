@@ -213,9 +213,11 @@ if "path" not in st.session_state:
     st.session_state.path = ""
     st.session_state.pages = ""
     st.session_state.retrievals = ""
-    st.session_state.rag_results = []
     st.session_state.rag_doc = ""
+    st.session_state.query = ""
+    st.session_state.queries = []
     st.session_state.rag_output = ""
+    st.session_state.rag_results = []
     st.session_state.rag_history = ""
     st.session_state.trans = ""
     st.session_state.rag_messages = [{"role": "assistant", "content": "How can I help you?"}]
@@ -248,6 +250,13 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 
 
 ###### [End] VectorDB 함수 ###############################################################################################
+
+if "grade" not in st.session_state:
+    st.session_state.grade = ""
+    st.session_state.grades = []
+
+grades = ["Bad", "SoSo", "Good", "Best"]
+
 
 #### [Start] RAG_without_History 함수 ####################################################################################    
 async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, compress, re_rank, multi_q):
@@ -306,6 +315,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
             if query:
                 retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
+                st.session_state.query = query
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.trans = trans_output
@@ -317,7 +327,10 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 with col111: st.write(st.session_state.rag_output)
                 with col112: st.write(st.session_state.trans)
 
+
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+                st.session_state.queries.append(st.session_state.query)
+                st.session_state.results.append(st.session_state.rag_output)
 
                 if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
@@ -329,6 +342,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
+            st.session_state.query = query
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
@@ -340,11 +354,23 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             col111, col112 = st.columns(2)
             with col111: st.write(st.session_state.rag_output)
             with col112: st.write(st.session_state.trans)
-            
+
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+            st.session_state.queries.append(st.session_state.query)
+            st.session_state.results.append(st.session_state.rag_output)
+
             if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
             else: pass
+
+    col111, col112 = st.columns(2)
+    with col111: st.write(st.session_state.rag_output)
+    with col112: st.write(st.session_state.trans)
+
+    st.session_state.grade = st.radio("Response Grade", grades, index=1)
+    if st.session_state.rag_output and st.button("Save Grade"):
+        st.session_state.grades.append(st.session_state.grade)
+    st.session_state.grades
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
@@ -372,10 +398,12 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 path = base_img_path +str(k) +"/"+str(i)
                 st.image(path, caption=path)
 
+    
+
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        df = pd.DataFrame(st.session_state.rag_reversed_messages)
-        st.dataframe(df.head(), use_container_width=True)
+        df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.dataframe(df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
             df.to_csv(f"./results/{file_name}.csv")
@@ -457,6 +485,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
 
             if query:
                 retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
+                st.session_state.query = query
                 st.session_state.rag_doc = retrival_output
                 st.session_state.rag_output = output
                 st.session_state.rag_history = history
@@ -469,10 +498,12 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
                 with col81: st.write(st.session_state.rag_output)
                 with col82: st.write(st.session_state.trans)
                 
-                with st.expander("History"):
-                    st.write(st.session_state.rag_history)
+                # with st.expander("History"):
+                #     st.write(st.session_state.rag_history)
 
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+                st.session_state.queries.append(st.session_state.query)
+                st.session_state.results.append(st.session_state.rag_output)
 
                 if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
@@ -484,6 +515,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             st.session_state.rag_messages.append({"role": "user", "content": query})
 
             retrival_output, output, history, trans_output = await call_rag_with_history(custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
+            st.session_state.query = query
             st.session_state.rag_doc = retrival_output
             st.session_state.rag_output = output
             st.session_state.rag_history = history
@@ -495,14 +527,26 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             col81, col82 = st.columns(2)
             with col81: st.write(st.session_state.rag_output)
             with col82: st.write(st.session_state.trans)
-            with st.expander("History"):
-                st.write(st.session_state.rag_history)
+
+            # with st.expander("History"):
+            #     st.write(st.session_state.rag_history)
 
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
+            st.session_state.queries.append(st.session_state.query)
+            st.session_state.results.append(st.session_state.rag_output)
 
             if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
             else: pass
+
+    col81, col82 = st.columns(2)
+    with col81: st.write(st.session_state.rag_output)
+    with col82: st.write(st.session_state.trans)
+
+    st.session_state.grade = st.radio("Response Grade", grades, index=1)
+    if st.session_state.rag_output and st.button("Save Grade"):
+        st.session_state.grades.append(st.session_state.grade)
+    st.session_state.grades
 
     st.markdown("---")
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
@@ -532,8 +576,8 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
 
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        df = pd.DataFrame(st.session_state.rag_reversed_messages)
-        st.dataframe(df.head(), use_container_width=True)
+        df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.dataframe(df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
             df.to_csv(f"./results/{file_name}.csv")
@@ -577,7 +621,7 @@ if __name__ == "__main__":
 
 
     with tab2:   # RAG
-        TTS_check = st.checkbox("📢 Apply TTS(Text to Speek)", key="wreq", help="LLM reads the Response")
+        TTS_check = st.checkbox("📢 Apply TTS(Text to Speech)", key="wreq", help="LLM reads the Response")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
         with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
         with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
