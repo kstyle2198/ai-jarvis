@@ -222,6 +222,7 @@ if "path" not in st.session_state:
     st.session_state.trans = ""
     st.session_state.rag_messages = [{"role": "assistant", "content": "How can I help you?"}]
     st.session_state.rag_reversed_messages = ""
+    st.session_state.result_df = pd.DataFrame()
 
 if "doc_list" not in st.session_state:
     st.session_state.doc_list = []
@@ -250,13 +251,11 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 
 
 ###### [End] VectorDB 함수 ###############################################################################################
-
 if "grade" not in st.session_state:
     st.session_state.grade = ""
     st.session_state.grades = []
 
 grades = ["Bad", "SoSo", "Good", "Best"]
-
 
 #### [Start] RAG_without_History 함수 ####################################################################################    
 async def api_ollama(url, custome_template, llm_name, input_voice, temp, top_k, top_p, doc, compress, re_rank, multi_q):
@@ -302,7 +301,6 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
     rag_btn = st.button("💬 RAG Jarvis", help="")
-
     with st.spinner("Processing"):
         if  rag_btn and text_input == "":
             time.sleep(1)
@@ -327,7 +325,6 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 with col111: st.write(st.session_state.rag_output)
                 with col112: st.write(st.session_state.trans)
 
-
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
                 st.session_state.queries.append(st.session_state.query)
                 st.session_state.results.append(st.session_state.rag_output)
@@ -335,6 +332,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
                 else: pass
+
 
         elif rag_btn and text_input:
             start_time = datetime.now()
@@ -363,17 +361,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 await tts(st.session_state.rag_output)
             else: pass
 
-    col111, col112 = st.columns(2)
-    with col111: st.write(st.session_state.rag_output)
-    with col112: st.write(st.session_state.trans)
-
-    st.session_state.grade = st.radio("Response Grade", grades, index=1)
-    if st.session_state.rag_output and st.button("Save Grade"):
-        st.session_state.grades.append(st.session_state.grade)
-    st.session_state.grades
-
-    st.markdown("---")
-    st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+    ##### [Start] Metadata #################################
     with st.expander("Retrieval Documents(Metadata) & Images"):
         meta_list = []
         img_dict = dict()
@@ -386,35 +374,44 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             else:
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
         meta_list
+
         base_img_path = "./images/"
         for k in img_dict.keys():
             path = base_img_path + str(k)
             imgs = list_selected_files(path, "png")
-
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
         image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
                 st.image(path, caption=path)
-
-    
-
+    ##### [End] Metadata #################################
+    ##### [Start] Chat History ############################3
+    st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]        
+    with st.expander("Chat Histoy"):
+        for msg in st.session_state.rag_reversed_messages:
+            if msg["role"] == "user":
+                st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
+            else:
+                st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
+    st.markdown("---")
+    ##### [End] Chat History ############################3
+    ##### [Start] Save Grade ############################3
+    st.session_state.grade = st.radio("Response Grade", grades, index=None)
+    save_grade = st.button("Save Grade")
+    if st.session_state.rag_output and st.session_state.grade and save_grade:
+        st.session_state.grades.append(st.session_state.grade)
+        st.info("Grade is saved")
+    ##### [End] Save Grade ############################3
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
-        st.dataframe(df, use_container_width=True)
+        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.dataframe(st.session_state.result_df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
             df.to_csv(f"./results/{file_name}.csv")
             st.info("File is Saved")
     ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
-
-    for msg in st.session_state.rag_reversed_messages:
-        if msg["role"] == "user":
-            st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
-        else:
-            st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 ##### [End] RAG_without_History 함수 ############################################################################
 
 ##### [Start] RAG with History ##########################################################################################
@@ -497,9 +494,6 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
                 col81, col82 = st.columns(2)
                 with col81: st.write(st.session_state.rag_output)
                 with col82: st.write(st.session_state.trans)
-                
-                # with st.expander("History"):
-                #     st.write(st.session_state.rag_history)
 
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
                 st.session_state.queries.append(st.session_state.query)
@@ -528,9 +522,6 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             with col81: st.write(st.session_state.rag_output)
             with col82: st.write(st.session_state.trans)
 
-            # with st.expander("History"):
-            #     st.write(st.session_state.rag_history)
-
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
             st.session_state.queries.append(st.session_state.query)
             st.session_state.results.append(st.session_state.rag_output)
@@ -538,18 +529,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
             else: pass
-
-    col81, col82 = st.columns(2)
-    with col81: st.write(st.session_state.rag_output)
-    with col82: st.write(st.session_state.trans)
-
-    st.session_state.grade = st.radio("Response Grade", grades, index=1)
-    if st.session_state.rag_output and st.button("Save Grade"):
-        st.session_state.grades.append(st.session_state.grade)
-    st.session_state.grades
-
-    st.markdown("---")
-    st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]
+    ##### [Start] Metadata #################################
     with st.expander("Retrieval Documents(Metadata) & Images"):
         meta_list = []
         img_dict = dict()
@@ -562,33 +542,44 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             else:
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
         meta_list
+
         base_img_path = "./images/"
         for k in img_dict.keys():
             path = base_img_path + str(k)
             imgs = list_selected_files(path, "png")
-
         sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
         image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
             for i in sel2_img:
                 path = base_img_path +str(k) +"/"+str(i)
                 st.image(path, caption=path)
-
+    ##### [End] Metadata #################################
+    ##### [Start] Chat History ############################3
+    st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]        
+    with st.expander("Chat Histoy"):
+        for msg in st.session_state.rag_reversed_messages:
+            if msg["role"] == "user":
+                st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
+            else:
+                st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
+    st.markdown("---")
+    ##### [End] Chat History ############################3
+    ##### [Start] Save Grade ############################3
+    st.session_state.grade = st.radio("Response Grade", grades, index=None)
+    save_grade = st.button("Save Grade")
+    if st.session_state.rag_output and st.session_state.grade and save_grade:
+        st.session_state.grades.append(st.session_state.grade)
+        st.info("Grade is saved")
+    ##### [End] Save Grade ############################3
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
-        st.dataframe(df, use_container_width=True)
+        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.dataframe(st.session_state.result_df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
             df.to_csv(f"./results/{file_name}.csv")
             st.info("File is Saved")
     ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
-
-    for msg in st.session_state.rag_reversed_messages:
-        if msg["role"] == "user":
-            st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
-        else:
-            st.chat_message(msg["role"], avatar="🤖").write(msg["content"])
 ######### [End] RAG with History #####################################################################################
 
 ######## [Start] Templates #######################################################################################
@@ -612,7 +603,7 @@ if __name__ == "__main__":
         
     tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
 
-    with tab1:  # Chatbot
+    with tab1:  # Open Chat
         tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
         with st.expander("✔️ Select Prompt Concept", expanded=False):
             sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "Medical Assistant", "한글_테스트", "English_Teacher"], help="Define the roll of LLM")
@@ -688,11 +679,12 @@ if __name__ == "__main__":
                             st.session_state.pages = temp_pages
                         else:  # 깡통 PDF인 경우, OCR 파싱 적용
                             st.session_state.pages = custom_parser.ocr_parsing(st.session_state.path)
-                st.info("Parsing is Completed")
-                st.session_state.pages
+                        st.info("Parsing is Completed")
+                st.markdown(f"Length of Splitted Document: {len(st.session_state.pages)}")
 
                 if st.session_state.pages:
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
+                    st.info("VectorStore is Completed")
             except:
                 st.success("There is no selected file")
 
@@ -703,7 +695,7 @@ if __name__ == "__main__":
             st.session_state.doc_list = sorted(doc_list)
 
             with st.expander(f"📋 Document List ({len(st.session_state.doc_list)})"):
-                with st.container(height=200):
+                with st.container(height=500):
                     for doc in st.session_state.doc_list:
                         st.markdown(f"- {doc}")
 
@@ -728,7 +720,6 @@ if __name__ == "__main__":
         try:
             del_ids = vectordb.get(where={'keywords':delete_doc})["ids"]
             # del_ids
-
             if st.button("Delete All Ids"):
                 vectordb.delete(del_ids)
                 st.info("All Selected Ids were Deleted")

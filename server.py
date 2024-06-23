@@ -25,8 +25,11 @@ import re
 import ast
 import logging
 
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
 selected_voice = "David"   # David, Hazel
-# selected_voice = "Hazel" 
 language = "en"
 
 # selected_voice = "Heami"   
@@ -130,22 +133,44 @@ async def jarvis_chat(template, llm_name, input_voice):
 async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top_p, doc=None, compress=False, re_rank=False, multi_q=False):
     embed_model = OllamaEmbeddings(model="nomic-embed-text")
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
-    vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
+    vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 5}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 10}) 
     else:
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords":doc}}) 
-        retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}}) 
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 5, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {"keywords":doc}}) 
+        retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {"keywords": {'$in': doc}}}) 
+        # retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
     docs = await asyncio.to_thread(retriever.invoke, query)
     print(f"Number of Base Retrieval Docs: {len(docs)}")
     #### Multi Query ############################################################################
-    if multi_q: 
+    # if multi_q: 
+    #     print("proceed Multi-Query")
+    #     retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
+    #     print(retriever)
+    # else: pass
+
+    if multi_q:
         print("proceed Multi-Query")
-        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
+        prompt = PromptTemplate.from_template(
+            """You are an AI language model assistant. 
+        Your task is to generate five different versions of the given user question, including given user question, to retrieve relevant documents from a vector database. 
+        By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of the distance-based similarity search. 
+        Your response should be a list of values separated by new lines, eg: `foo\nbar\nbaz\n`
+
+        #ORIGINAL QUESTION: 
+        {question}
+        """
+        )
+        chain = {"question": RunnablePassthrough()} | prompt | llm | StrOutputParser()
+        multi_queries = chain.invoke({"question": query})
+        print(f"multi_queries: {multi_queries}")
+
+        retriever = MultiQueryRetriever.from_llm(
+            llm=chain, retriever=vectorstore.as_retriever()
+        )
+        docs = retriever.invoke(input=query)
+        print(f"Multi Query Retrieval Docs : {len(docs)}")
     else: pass
-    logging.basicConfig()
-    logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
     ###############################################################################################
     ##### Contextual Compressor ##################################################################
     if compress:
@@ -189,17 +214,33 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
 
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-    if doc == None: retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) 
-    else: retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"keywords": {'$in': doc}}})  
+    if doc == None: retriever = vectorstore.as_retriever(search_kwargs={"k": 10}) 
+    else: retriever = vectorstore.as_retriever(search_kwargs={"k": 10, "filter": {"keywords": {'$in': doc}}})  
     retrieved_docs = retriever.invoke(query)
     print(f"Number of Base Retrieval Docs: {len(retrieved_docs)}")
     ######## Multi Query ##############################################################
-    if multi_q: 
-        print("proceed Multi Query")
-        retriever = MultiQueryRetriever.from_llm(retriever=retriever, llm=llm, include_original=True)
+    if multi_q:
+        print("proceed Multi-Query")
+        prompt = PromptTemplate.from_template(
+            """You are an AI language model assistant. 
+        Your task is to generate five different versions of the given user question, including given user question, to retrieve relevant documents from a vector database. 
+        By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of the distance-based similarity search. 
+        Your response should be a list of values separated by new lines, eg: `foo\nbar\nbaz\n`
+
+        #ORIGINAL QUESTION: 
+        {question}
+        """
+        )
+        chain = {"question": RunnablePassthrough()} | prompt | llm | StrOutputParser()
+        multi_queries = chain.invoke({"question": query})
+        print(f"multi_queries: {multi_queries}")
+
+        retriever = MultiQueryRetriever.from_llm(
+            llm=chain, retriever=vectorstore.as_retriever()
+        )
+        docs = retriever.invoke(input=query)
+        print(f"Multi Query Retrieval Docs : {len(docs)}")
     else: pass
-    logging.basicConfig()
-    logging.getLogger("langchain.retrievers.multi_query").setLevel(logging.INFO)
     ###############################################################################################
     ### Contextualize question ###
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
@@ -253,6 +294,7 @@ def jarvis_rag_with_history(custom_template, model_name, query, temperature, top
     if re_rank: 
         print("proceed Re-Ranking")
         retrieved_docs = re_rank_documents(re_rank, retrieved_docs, query)
+        print(f"Number of Re-Ranking Retrieval Docs: {len(retrieved_docs)}")
     else: pass
     ###############################################################################################
 
@@ -336,7 +378,7 @@ import logging
 
 app = FastAPI(
     title="AI-Jarvis",
-    description="Local RAG Chatbot without Internet",
+    description="Local RAG AI Agent without Internet",
     version="0.0")
 
 ### [Start] Configure logging #######################
