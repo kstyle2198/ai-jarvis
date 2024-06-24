@@ -624,7 +624,7 @@ if __name__ == "__main__":
                 sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
         else: sel_doc = None
         with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Navigation_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
+            sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Technical_Engineer", "Navigation_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
             custome_template = st.text_area("📒 Template", rag_sys_templates[sel_template], height=200)
         try:
             if history_check:

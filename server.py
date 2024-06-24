@@ -135,11 +135,11 @@ async def jarvis_rag(custom_template, model_name, query, temperature, top_k, top
     llm = ChatOllama(model=model_name, temperature=temperature, top_k=top_k, top_p=top_p)
     vectorstore = Chroma(persist_directory="vector_index", embedding_function=embed_model)
     if doc == None:
-        retriever = vectordb.as_retriever(search_kwargs={"k": 10}) 
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 10}) 
     else:
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {"keywords":doc}}) 
-        retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {"keywords": {'$in': doc}}}) 
-        # retriever = vectordb.as_retriever(search_kwargs={"k": 10, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
+        # retriever = vectorstore.as_retriever(search_kwargs={"k": 10, "filter": {"keywords":doc}}) 
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 10, "filter": {"keywords": {'$in': doc}}}) 
+        # retriever = vectorstore.as_retriever(search_kwargs={"k": 10, "filter": {'$or': [{"keywords":"FWG"}, {"keywords":"ISS"}]}}) 
     docs = await asyncio.to_thread(retriever.invoke, query)
     print(f"Number of Base Retrieval Docs: {len(docs)}")
     #### Multi Query ############################################################################
