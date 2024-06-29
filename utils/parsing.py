@@ -77,43 +77,44 @@ def table_parser(pdf_path, page_num, crop):   # 테이블을 마크다운 형식
         full_result.append(table_string)
         return table_string
 
-def image_extractor(file_path, page_num, prefix):   # 추출 이미지 파일 따로 저장하기
-    images_path = f"./images/{prefix}/"
-    Path(images_path).mkdir(parents=True, exist_ok=True)
-    pdf_file = fitz.open(file_path)
-    images_list = []
-    page_content = pdf_file[page_num]
-    images_list.extend(page_content.get_images())
+# def image_extractor(file_path, page_num, prefix):   # 추출 이미지 파일 따로 저장하기
+#     images_path = f"./images/{prefix}/"
+#     Path(images_path).mkdir(parents=True, exist_ok=True)
+#     pdf_file = fitz.open(file_path)
+#     images_list = []
+#     page_content = pdf_file[page_num]
+#     images_list.extend(page_content.get_images())
 
-    if len(images_list)!=0:
-        for i, img in enumerate(images_list, start=1):
-            #Extract the image object number
-            xref = img[0]
-            #Extract image
-            base_image = pdf_file.extract_image(xref)
-            #Store image bytes
-            image_bytes = base_image['image']
-            #Store image extension
-            image_ext = base_image['ext']
-            #Generate image file name
-            image_name = str(page_num)+'_'+ str(i) + '.' + image_ext
-            #Save image
-            with open(os.path.join(images_path, image_name) , 'wb') as image_file:
-                image_file.write(image_bytes)
-                image_file.close()
-    else:
-        pass
+#     if len(images_list)!=0:
+#         for i, img in enumerate(images_list, start=1):
+#             #Extract the image object number
+#             xref = img[0]
+#             #Extract image
+#             base_image = pdf_file.extract_image(xref)
+#             #Store image bytes
+#             image_bytes = base_image['image']
+#             #Store image extension
+#             image_ext = base_image['ext']
+#             #Generate image file name
+#             image_name = str(page_num)+'_'+ str(i) + '.' + image_ext
+#             #Save image
+#             with open(os.path.join(images_path, image_name) , 'wb') as image_file:
+#                 image_file.write(image_bytes)
+#                 image_file.close()
+#     else:
+#         pass
 #### [End] PDF parsing help function ############################################3
 
 ##### [Start] OCR helper function ######################################################
 from paddleocr import PaddleOCR
 from pdf2image import convert_from_path
-def save_pdf_to_image(pdf_path, prefix):
+from tqdm import tqdm
+def save_pdf_to_image(pdf_path, prefix):  # pdf page 전체를 이미지로 저장
     pages = convert_from_path(pdf_path) 
-    folder_path = f"./pdf_to_images/{prefix}/"
+    folder_path = f"./images/{prefix}/"
     Path(folder_path).mkdir(parents=True, exist_ok=True)     
-    for idx, page in enumerate(pages):
-        page.save(f'./pdf_to_images/{prefix}/{prefix}_{idx}.png', 'PNG')
+    for idx, page in enumerate(tqdm(pages)):
+        page.save(f'./images/{prefix}/{prefix}_{idx}.png', 'PNG')
 ##### [End] OCR helper function ######################################################
 
 ###  [Start Main Class] ############################################################3
@@ -126,11 +127,12 @@ class CustomPdfParser(BaseLoader):
         prefix = file_path.split("\\")[-1].split(".")[0].strip()
         with pdfplumber.open(file_path) as pdf1:
             page_number = 0
-            for _ in pdf1.pages:
+            print("----------- starting pdf parsing ----------- ")
+            for _ in tqdm(pdf1.pages):
                 page_result = block_based_parsing_by_page(file_path, page_number, crop)
                 table_result = table_parser(file_path, page_number, crop)
-                image_files = image_extractor(file_path, page_number, prefix)
-                print(page_result)
+                # image_files = image_extractor(file_path, page_number, prefix)
+                # print(page_result)
 
                 if page_result:  # page contents 없는 깡통 PDF 체크
                     status = True
@@ -148,6 +150,11 @@ class CustomPdfParser(BaseLoader):
                     )
                 full_result.append(result)
                 page_number += 1
+            print("----------- completed pdf parsing ----------- ")
+
+            print("----------- starting saving page images ----------- ")
+            save_pdf_to_image(file_path, prefix)
+            print("----------- Completed saving page images -----------")
 
             return status, full_result
 
@@ -156,15 +163,19 @@ class CustomPdfParser(BaseLoader):
         ocr parsing은 table markdown 미포함 (깡통 파싱)
         '''
         prefix = pdf_path.split("\\")[-1].split(".")[0].strip()
+
+        print("----------- starting saving page images ----------- ")
         save_pdf_to_image(pdf_path, prefix)
-        file_list = os.listdir(f"./pdf_to_images/{prefix}")
+        print("----------- Completed saving page images -----------")
+
+        file_list = os.listdir(f"./images/{prefix}")
         selected_files = [file for file in file_list if file.endswith("png")]
 
         ocr = PaddleOCR(use_angle_cls=True, lang='en')
         full_result = []
-        for page_num, img_path in enumerate(selected_files):
+        for page_num, img_path in enumerate(tqdm(selected_files)):
             print(img_path)
-            img_path = f"./pdf_to_images/{prefix}/"+img_path
+            img_path = f"./images/{prefix}/"+img_path
             result = ocr.ocr(img_path)
             for idx in range(len(result)):
                 res = result[idx]

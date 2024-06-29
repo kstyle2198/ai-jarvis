@@ -333,7 +333,6 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                     await tts(st.session_state.rag_output)
                 else: pass
 
-
         elif rag_btn and text_input:
             start_time = datetime.now()
             query = text_input
@@ -365,27 +364,34 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
     with st.expander("Retrieval Documents(Metadata) & Images"):
         meta_list = []
         img_dict = dict()
+        st.session_state.rag_doc
         for d in st.session_state.rag_doc:
-            page_content, metadata = extract_metadata(d)
+            page_contents, metadata = extract_metadata(d)
             meta_list.append(metadata)
             if metadata["keywords"] not in img_dict.keys():
                 img_dict[metadata["keywords"]] =[]
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
             else:
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
-        meta_list
 
+        ### [Start] Img Show ---------------------------------------
         base_img_path = "./images/"
+        target_imgs = []
         for k in img_dict.keys():
-            path = base_img_path + str(k)
-            imgs = list_selected_files(path, "png")
-        sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
+            img_ids = img_dict[k]
+            for img_id in img_ids:
+                imgfile_name = base_img_path + str(k) + "/" +str(k) + "_" + str(img_id)+".png"
+                target_imgs.append(imgfile_name)
+        # print(f"target_imgs: {target_imgs}")
+
         image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
-            for i in sel2_img:
-                path = base_img_path +str(k) +"/"+str(i)
-                st.image(path, caption=path)
+            for path in target_imgs:
+                st.image(path, caption=path, width=700)
+        ### [End] Img Show ---------------------------------------
     ##### [End] Metadata #################################
+
+
     ##### [Start] Chat History ############################3
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]        
     with st.expander("Chat Histoy"):
@@ -533,6 +539,8 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
     with st.expander("Retrieval Documents(Metadata) & Images"):
         meta_list = []
         img_dict = dict()
+        st.session_state.rag_doc
+        
         for d in st.session_state.rag_doc:
             page_content, metadata = extract_metadata(d)
             meta_list.append(metadata)
@@ -541,18 +549,22 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
             else:
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
-        meta_list
-
+        
+        ### [Start] Img Show ---------------------------------------
         base_img_path = "./images/"
+        target_imgs = []
         for k in img_dict.keys():
-            path = base_img_path + str(k)
-            imgs = list_selected_files(path, "png")
-        sel2_img = [x for x in imgs if int(x.split("_")[0]) in img_dict[k]]
+            img_ids = img_dict[k]
+            for img_id in img_ids:
+                imgfile_name = base_img_path + str(k) + "/" +str(k) + "_" + str(img_id)+".png"
+                target_imgs.append(imgfile_name)
+        # print(f"target_imgs: {target_imgs}")
+
         image_show_check = st.checkbox("Show Images", value=True)
         if image_show_check:
-            for i in sel2_img:
-                path = base_img_path +str(k) +"/"+str(i)
-                st.image(path, caption=path)
+            for path in target_imgs:
+                st.image(path, caption=path, width=700)
+        ### [End] Img Show ---------------------------------------
     ##### [End] Metadata #################################
     ##### [Start] Chat History ############################3
     st.session_state.rag_reversed_messages = st.session_state.rag_messages[::-1]        
@@ -591,7 +603,7 @@ rag_sys_templates = cp.rag_sys_template()
 
 
 if __name__ == "__main__":
-    st.title("⚓ AI Jarvis")
+    st.title("⚓ HD-CoPilot")
     st.checkbox("🐬 Wide Layout", key="center", value=st.session_state.get("center", False))
     with st.expander("🧭 **Note**"):
         st.markdown("""
@@ -605,8 +617,8 @@ if __name__ == "__main__":
 
     with tab1:  # Open Chat
         tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
-        with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["AI_CoPilot", "Medical Assistant", "한글_테스트", "English_Teacher"], help="Define the roll of LLM")
+        sel_template = st.radio("🖋️ Prompt", ["AI_CoPilot", "Medical Assistant", "한글_테스트", "English_Teacher"], help="Define the roll of LLM")
+        with st.expander("✔️ Prompt Details", expanded=False):
             custome_template = st.text_area("📒 Template", custom_templates[sel_template], height=200)
         asyncio.run(chat_main(custome_template, tts_check1))
 
@@ -623,8 +635,8 @@ if __name__ == "__main__":
             with st.expander("📚 Specify the Target Documents", expanded=True):
                 sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
         else: sel_doc = None
-        with st.expander("✔️ Select Prompt Concept", expanded=False):
-            sel_template = st.radio("🖋️ Select & Edit", ["Common_Engineer", "Technical_Engineer", "Navigation_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
+        sel_template = st.radio("🖋️ Prompt", ["Common_Engineer", "Technical_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
+        with st.expander("✔️ Prompt Details", expanded=False):
             custome_template = st.text_area("📒 Template", rag_sys_templates[sel_template], height=200)
         try:
             if history_check:
@@ -684,7 +696,6 @@ if __name__ == "__main__":
 
                 if st.session_state.pages:
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
-                    st.info("VectorStore is Completed")
             except:
                 st.success("There is no selected file")
 
@@ -695,7 +706,7 @@ if __name__ == "__main__":
             st.session_state.doc_list = sorted(doc_list)
 
             with st.expander(f"📋 Document List ({len(st.session_state.doc_list)})"):
-                with st.container(height=500):
+                with st.container():
                     for doc in st.session_state.doc_list:
                         st.markdown(f"- {doc}")
 

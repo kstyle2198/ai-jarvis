@@ -377,7 +377,7 @@ import asyncio
 import logging
 
 app = FastAPI(
-    title="AI-Jarvis",
+    title="HD-CoPilot",
     description="Local RAG AI Agent without Internet",
     version="0.0")
 
