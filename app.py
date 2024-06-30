@@ -130,11 +130,12 @@ async def call_jarvis_ko(custom_template, llm_name, input_voice):
 
 async def chat_main(custome_template, tts_check=False):
     with st.container():
-        llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Ko-Llama3-q4(8B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
+        llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)", "Ko-Llama3-q4(8B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
         if llm1 == "Gemma(2B)": llm_name = "gemma:2b"
         elif llm1 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm1 == "Llama3(8B)": llm_name = "llama3:latest"
+        elif llm1 == "Gemma2(9B)": llm_name = "gemma2:latest"
         elif llm1 == "Ko-Llama3-q4(8B)": llm_name = "HD-ko-llama3-q4:latest"
         else: pass
     text_input = st.text_input("✏️ Send your Qeustions", placeholder="Input your Qeustions", key="wqdssd")
@@ -254,6 +255,7 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 if "grade" not in st.session_state:
     st.session_state.grade = ""
     st.session_state.grades = []
+    st.session_state.llms = []
 
 grades = ["Bad", "SoSo", "Good", "Best"]
 
@@ -290,13 +292,14 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
         with col933: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.(Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=1, key="dsssv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)"], index=1, key="dsssv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
     with st.container():
         if llm2 == "Gemma(2B)": llm_name = "gemma:2b"
         elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
+        elif llm2 == "Gemma2(9B)": llm_name = "gemma2:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
@@ -328,6 +331,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
                 st.session_state.queries.append(st.session_state.query)
                 st.session_state.results.append(st.session_state.rag_output)
+                st.session_state.llms.append(llm2)
 
                 if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
@@ -355,6 +359,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
             st.session_state.queries.append(st.session_state.query)
             st.session_state.results.append(st.session_state.rag_output)
+            st.session_state.llms.append(llm2)
 
             if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
@@ -411,7 +416,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
     ##### [End] Save Grade ############################3
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "llm":st.session_state.llms, "Grade": st.session_state.grades})
         st.dataframe(st.session_state.result_df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
@@ -458,13 +463,14 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
         with col9333: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, key="qwer", help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. (Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)"], index=1, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)"], index=1, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
 
     with st.container():
         if llm2 == "Gemma(2B)": llm_name = "gemma:2b"
         elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
+        elif llm2 == "Gemma2(9B)": llm_name = "gemma2:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dlsdfg")
@@ -504,6 +510,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
                 st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
                 st.session_state.queries.append(st.session_state.query)
                 st.session_state.results.append(st.session_state.rag_output)
+                st.session_state.llms.append(llm2)
 
                 if st.session_state.rag_output and TTS:
                     await tts(st.session_state.rag_output)
@@ -531,6 +538,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
             st.session_state.rag_messages.append({"role": "assistant", "content": st.session_state.rag_output})
             st.session_state.queries.append(st.session_state.query)
             st.session_state.results.append(st.session_state.rag_output)
+            st.session_state.llms.append(llm2)
 
             if st.session_state.rag_output and TTS:
                 await tts(st.session_state.rag_output)
@@ -585,7 +593,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
     ##### [End] Save Grade ############################3
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Grade": st.session_state.grades})
+        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "llm":st.session_state.llms, "Grade": st.session_state.grades})
         st.dataframe(st.session_state.result_df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
@@ -626,7 +634,7 @@ if __name__ == "__main__":
     with tab2:   # RAG
         TTS_check = st.checkbox("📢 Apply TTS(Text to Speech)", key="wreq", help="LLM reads the Response")
         col71, col72, col73, col74, col75,  = st.columns([4, 5, 4, 5, 4])
-        with col71: history_check = st.checkbox("History", help="If checked, LLM will remember our conversation history")
+        with col71: history_check = st.checkbox("History", help="If checked, LLM will remember the previous query")
         with col72: sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
         with col73: re_rank_check = st.checkbox("Re Rank", help="Apply Re-Rank")
         with col74: compress_check = st.checkbox("Compress", help="Apply Contextual Compressor")

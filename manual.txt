@@ -7,16 +7,15 @@
 
 <<꼭 필요한 폴더 구조>>
 - images
-- models - cross_encoder
+- models/cross_encoder
 - utils
 - results
-- pdf_to_images
 
 <<설치 Manual>>
 1. 파이썬 설치  3.10.11
 2. vs code 설치
 3. ollama 설치
-   - model pull: llama3:latest, gemma:2b, phi3:latest, nomic-embed-text
+   - model pull: llama3:latest, gemma:2b, phi3:latest, nomic-embed-text, gemma2:latest
 4. huggingface model 다운로드
    - cross-encoder/ms-marco-TinyBERT-L-2   (re-ranking용 모델)
 
