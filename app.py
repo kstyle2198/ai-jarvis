@@ -707,30 +707,30 @@ if __name__ == "__main__":
             except:
                 st.success("There is no selected file")
 
-        try:
-            df = cv.view_collections("vector_index")
-            df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
-            doc_list = df["title"].unique().tolist()
-            st.session_state.doc_list = sorted(doc_list)
+        # try:
+        df = cv.view_collections("vector_index")
+        df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
+        doc_list = df["title"].unique().tolist()
+        st.session_state.doc_list = sorted(doc_list)
 
-            with st.expander(f"📋 Document List ({len(st.session_state.doc_list)})"):
-                with st.container():
-                    for doc in st.session_state.doc_list:
-                        st.markdown(f"- {doc}")
+        with st.expander(f"📋 Document List ({len(st.session_state.doc_list)})"):
+            with st.container():
+                for doc in st.session_state.doc_list:
+                    st.markdown(f"- {doc}")
 
-            with st.expander("🔎 Retrieval Test (Similarity Search)"):
-                embed_model = OllamaEmbeddings(model="nomic-embed-text")
-                vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
-                my_query = st.text_input("✏️ text input", key="qwqqq", placeholder="Input your target senetences for similarity search")
-                with st.spinner("Processing..."):
-                    if st.button("Similarity Search"):
-                        st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
-                st.session_state.retrievals
+        with st.expander("🔎 Retrieval Test (Similarity Search)"):
+            embed_model = OllamaEmbeddings(model="nomic-embed-text")
+            vectordb = Chroma(persist_directory="vector_index", embedding_function=embed_model)
+            my_query = st.text_input("✏️ text input", key="qwqqq", placeholder="Input your target senetences for similarity search")
+            with st.spinner("Processing..."):
+                if st.button("Similarity Search"):
+                    st.session_state.retrievals = vectordb.similarity_search_with_score(my_query)
+            st.session_state.retrievals
 
-            with st.expander(f"**Dataframe Shape: {df.shape}**"):
-                st.dataframe(df, use_container_width=True)
-        except:
-            st.info("There is no VectorStore")
+        with st.expander(f"**Dataframe Shape: {df.shape}**"):
+            st.dataframe(df, use_container_width=True)
+        # except:
+        #     st.info("There is no VectorStore")
 
         st.markdown("---")
         st.subheader("Delete Embeded Documents")

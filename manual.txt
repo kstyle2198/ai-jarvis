@@ -42,6 +42,12 @@
     pip install pdf2image
     pip install paddleocr
     pip install paddlepaddle
+    pip install langchain-community
+    pip install chromadb
+
+    pip install AutoRAG
+    
+
     pip install pdfminer.six
     pip install transformers -U
 

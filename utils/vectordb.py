@@ -21,7 +21,9 @@ class ChromaViewer():
         for collection in client.list_collections():
             # print(collection)
             data = collection.get(include=['embeddings', 'documents', 'metadatas'])
-            df = pd.DataFrame.from_dict(data)
+            # print(data)
+            df = pd.DataFrame({"ids":data["ids"], "embeddings":data["embeddings"], "metadatas":data["metadatas"], "documents":data["documents"]})
+            # df = pd.DataFrame.from_dict(data)
         return df
 
 

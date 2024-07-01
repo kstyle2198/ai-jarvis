@@ -105,6 +105,8 @@ def table_parser(pdf_path, page_num, crop):   # 테이블을 마크다운 형식
 #         pass
 #### [End] PDF parsing help function ############################################3
 
+
+
 ##### [Start] OCR helper function ######################################################
 from paddleocr import PaddleOCR
 from pdf2image import convert_from_path
@@ -116,6 +118,7 @@ def save_pdf_to_image(pdf_path, prefix):  # pdf page 전체를 이미지로 저�
     for idx, page in enumerate(tqdm(pages)):
         page.save(f'./images/{prefix}/{prefix}_{idx}.png', 'PNG')
 ##### [End] OCR helper function ######################################################
+
 
 ###  [Start Main Class] ############################################################3
 class CustomPdfParser(BaseLoader):
