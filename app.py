@@ -136,7 +136,7 @@ async def chat_main(custome_template, tts_check=False):
         elif llm1 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm1 == "Llama3(8B)": llm_name = "llama3:latest"
         elif llm1 == "Gemma2(9B)": llm_name = "gemma2:latest"
-        elif llm1 == "Ko-Llama3-q4(8B)": llm_name = "HD-ko-llama3-q4:latest"
+        elif llm1 == "Ko-Llama3-q4(8B)": llm_name = "ko_llama3_bllossom:latest"
         else: pass
     text_input = st.text_input("✏️ Send your Qeustions", placeholder="Input your Qeustions", key="wqdssd")
     call_btn = st.button("💬 Chat Jarvis", help="")
@@ -228,6 +228,9 @@ if "path" not in st.session_state:
 if "doc_list" not in st.session_state:
     st.session_state.doc_list = []
 
+if "context_list" not in st.session_state:
+    st.session_state.context_list = []
+
 custom_parser = CustomPdfParser()
 cv = ChromaViewer
 
@@ -292,7 +295,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
         with col933: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.(Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)"], index=1, key="dsssv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)", "Ko-Llama3-q4(8B)"], index=1, key="dsssv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
     
     with st.container():
@@ -300,6 +303,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
         elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
         elif llm2 == "Gemma2(9B)": llm_name = "gemma2:latest"
+        elif llm2 == "Ko-Llama3-q4(8B)": llm_name = "ko_llama3_bllossom:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dls")
@@ -345,6 +349,7 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
             retrival_output, output, trans_output = await call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q)
             st.session_state.query = query
             st.session_state.rag_doc = retrival_output
+
             st.session_state.rag_output = output
             st.session_state.trans = trans_output
             end_time = datetime.now()
@@ -367,12 +372,16 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
 
     ##### [Start] Metadata #################################
     with st.expander("Retrieval Documents(Metadata) & Images"):
+        
         meta_list = []
+        contexts_list = []
         img_dict = dict()
         st.session_state.rag_doc
+
         for d in st.session_state.rag_doc:
-            page_contents, metadata = extract_metadata(d)
+            page_content, metadata = extract_metadata(d)
             meta_list.append(metadata)
+            contexts_list.append(page_content)
             if metadata["keywords"] not in img_dict.keys():
                 img_dict[metadata["keywords"]] =[]
                 img_dict[metadata["keywords"]].append(metadata["page_number"])
@@ -411,17 +420,27 @@ async def rag_main(custome_template, doc=None, compress=False, re_rank=False, mu
     st.session_state.grade = st.radio("Response Grade", grades, index=None)
     save_grade = st.button("Save Grade")
     if st.session_state.rag_output and st.session_state.grade and save_grade:
+        st.session_state.context_list.append(str(contexts_list))
         st.session_state.grades.append(st.session_state.grade)
         st.info("Grade is saved")
     ##### [End] Save Grade ############################3
     ##### [Start] DATAFRAME 생성 및 저장 ---------------------------------------
     with st.expander("Save Response Results(CSV file)"):
-        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "llm":st.session_state.llms, "Grade": st.session_state.grades})
+        # st.session_state.queries
+        # st.session_state.results
+        # st.session_state.context_list
+        # st.session_state.llms
+        # st.session_state.grades
+
+
+        st.session_state.result_df = pd.DataFrame({"Query":st.session_state.queries, "Answer":st.session_state.results, "Context": st.session_state.context_list, "llm":st.session_state.llms, "Grade": st.session_state.grades})
         st.dataframe(st.session_state.result_df, use_container_width=True)
+
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
-            df.to_csv(f"./results/{file_name}.csv")
+            st.session_state.result_df.to_csv(f"./results/{file_name}.csv")
             st.info("File is Saved")
+
     ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
 ##### [End] RAG_without_History 함수 ############################################################################
 
@@ -463,7 +482,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
         with col9333: top_p = st.slider("📝 :blue[Top-P(More Diverse Text)]", min_value=0.0, max_value=1.0, value=0.5, key="qwer", help="Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. (Original Default: 0.9)")
 
     with st.container():
-        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)"], index=1, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
+        llm2 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3(8B)", "Gemma2(9B)", "Ko-Llama3-q4(8B)"], index=1, key="dsssadfsv", help="Bigger LLM returns better answers but takes more time")
         st.write('<style>div.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
 
     with st.container():
@@ -471,6 +490,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
         elif llm2 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm2 == "Llama3(8B)": llm_name = "llama3:latest"
         elif llm2 == "Gemma2(9B)": llm_name = "gemma2:latest"
+        elif llm2 == "Ko-Llama3-q4(8B)": llm_name = "ko_llama3_bllossom:latest"
         else: pass
 
     text_input = st.text_input("✏️ Send your Queries", placeholder="Input your Query", key="dlsdfg")
@@ -597,7 +617,7 @@ async def rag_main_history(custome_template, doc, compress=False, re_rank=False,
         st.dataframe(st.session_state.result_df, use_container_width=True)
         file_name = st.text_input("Input your file name", placeholder="Input your unique file name")
         if st.button("Save"):
-            df.to_csv(f"./results/{file_name}.csv")
+            st.session_state.result_df.to_csv(f"./results/{file_name}.csv")
             st.info("File is Saved")
     ##### [End] DATAFRAME 생성 및 저장 ---------------------------------------
 ######### [End] RAG with History #####################################################################################
@@ -621,7 +641,7 @@ if __name__ == "__main__":
                     - In the Dev mode, Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
         
-    tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **Prompt_Engineering**"])
+    tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **RAGAs**"])
 
     with tab1:  # Open Chat
         tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
@@ -643,7 +663,7 @@ if __name__ == "__main__":
             with st.expander("📚 Specify the Target Documents", expanded=True):
                 sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
         else: sel_doc = None
-        sel_template = st.radio("🖋️ Prompt", ["Common_Engineer", "Technical_Engineer", "Electrical_Engineer"], help="Define the roll of LLM")
+        sel_template = st.radio("🖋️ Prompt", ["Common_Engineer", "Technical_Engineer", "Korean_Engineer"], help="Define the roll of LLM")
         with st.expander("✔️ Prompt Details", expanded=False):
             custome_template = st.text_area("📒 Template", rag_sys_templates[sel_template], height=200)
         try:
@@ -746,8 +766,80 @@ if __name__ == "__main__":
             st.empty()
 
     with tab4:   # Prompt Engineering
-        st.warning("Under Construction")
-        st.empty()
+        # try:
+        st.session_state.result_df
+        row_num = st.number_input("row number", value=0)
+
+        t_df9 = st.session_state.result_df.iloc[row_num:row_num+1,:]
+        t_df9
+
+        t_df9["Query"].tolist()
+        t_df9["Answer"].tolist()
+        t_df9["Context"].tolist()
+
+        ground_truth = st.text_area("Ground Truth")
+
+        data = {
+            "question": t_df9["Query"].tolist(),
+            "answer": t_df9["Answer"].tolist(),
+            "contexts": t_df9["Context"].tolist(),
+            "ground_truth": ground_truth
+        }
+
+        t_df8 = pd.DataFrame(data)
+        t_df8
+
+        import ast
+        for col in ["contexts"]:
+            t_df8[col] = t_df8[col].apply(ast.literal_eval)
+
+
+        from datasets import Dataset
+        from langchain_community.embeddings import OllamaEmbeddings
+        from langchain_community.chat_models import ChatOllama
+        
+        from ragas import evaluate
+        from ragas.metrics import (
+            answer_relevancy,
+            faithfulness,
+            context_recall,
+            context_precision,
+        )
+
+        tds = Dataset.from_pandas(t_df8)
+        tds
+
+        llm = ChatOllama(model="phi3:latest")
+        embedding_model = OllamaEmbeddings(model="nomic-embed-text")
+        with st.spinner("Processing..."):
+            if st.button("Evaluate"):
+                naive_results = evaluate(
+                    tds, 
+                    metrics = [
+                        context_precision,
+                        context_recall,
+                        faithfulness,
+                        answer_relevancy,
+                    ],
+                    llm = llm,
+                    embeddings=embedding_model,
+                    raise_exceptions=True)
+
+                naive_results
+
+
+
+
+
+
+
+
+
+
+        # except:
+        #     st.warning("Under Construction")
+
+
         
 
 
