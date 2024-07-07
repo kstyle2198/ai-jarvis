@@ -112,8 +112,12 @@ from paddleocr import PaddleOCR
 from pdf2image import convert_from_path
 from tqdm import tqdm
 def save_pdf_to_image(pdf_path, prefix):  # pdf page 전체를 이미지로 저장
+
     pages = convert_from_path(pdf_path) 
+    print(f"convert_from_path: {pages}")
+    print(f"prefix: {prefix}")
     folder_path = f"./images/{prefix}/"
+    print(f"folder_path: {folder_path}")
     Path(folder_path).mkdir(parents=True, exist_ok=True)     
     for idx, page in enumerate(tqdm(pages)):
         page.save(f'./images/{prefix}/{prefix}_{idx}.png', 'PNG')
@@ -127,7 +131,7 @@ class CustomPdfParser(BaseLoader):
     def pdf_parsing(self, file_path, crop:bool) -> Iterator[Document]:  # <-- Does not take any arguments
         full_result = []
         status = False
-        prefix = file_path.split("\\")[-1].split(".")[0].strip()
+        prefix = file_path.split("/")[-1].split(".")[0].strip()
         with pdfplumber.open(file_path) as pdf1:
             page_number = 0
             print("----------- starting pdf parsing ----------- ")
@@ -165,7 +169,7 @@ class CustomPdfParser(BaseLoader):
         '''
         ocr parsing은 table markdown 미포함 (깡통 파싱)
         '''
-        prefix = pdf_path.split("\\")[-1].split(".")[0].strip()
+        prefix = pdf_path.split("/")[-1].split(".")[0].strip()
 
         print("----------- starting saving page images ----------- ")
         save_pdf_to_image(pdf_path, prefix)

@@ -17,7 +17,7 @@ if "center" not in st.session_state:
     layout = "centered"
 else:
     layout = "wide" if st.session_state.center else "centered"
-st.set_page_config(page_title="AI Jarvis", layout=layout)
+st.set_page_config(page_title="AI Captain", layout=layout)
 
 st.markdown(
             """
@@ -32,7 +32,8 @@ st.markdown(
         )
 
 parent_dir = Path(__file__).parent
-base_dir = str(parent_dir) + "\data"  
+parent_dir = str(parent_dir).replace("\\", "/")
+base_dir = str(parent_dir) + "/data"  
 
 
 #### [Start] 공통함수 #############################################################################
@@ -631,8 +632,8 @@ rag_sys_templates = cp.rag_sys_template()
 
 
 if __name__ == "__main__":
-    st.title("⚓ HD-CoPilot")
-    st.checkbox("🐬 Wide Layout", key="center", value=st.session_state.get("center", False))
+    st.title("⚓ AI Captain")
+    st.checkbox("🐋 Wide Layout", key="center", value=st.session_state.get("center", False))
     with st.expander("🧭 **Note**"):
         st.markdown("""
                     - This AI app is created for :green[**Local Chatbot and RAG Service using sLLM without Internet**].
@@ -641,7 +642,7 @@ if __name__ == "__main__":
                     - In the Dev mode, Translation API needs Internet. (will be excluded in the Production Mode)
                     """)
         
-    tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **RAGAs**"])
+    tab1, tab2, tab3, tab4 = st.tabs(["⚾ **Chatbot**", "⚽ **RAG**", "🗄️ **VectorStore**", "⚙️ **RAGAs**", ])
 
     with tab1:  # Open Chat
         tts_check1 = st.checkbox("📢 Apply TTS(Text to Speech)", key="wewrw", help="LLM reads the Response")
@@ -684,8 +685,9 @@ if __name__ == "__main__":
             if uploaded_file:
                 temp_dir = base_dir   # tempfile.mkdtemp()  --->  import tempfile 필요, 임시저장디렉토리 자동지정함
                 path = os.path.join(temp_dir, uploaded_file.name)
+                path = str(path).replace("\\", "/")
                 path
-            
+
             if st.button("Save", type='secondary', help="첨부파일이 word(.docx)인 경우, pdf로 변환하여 저장함"):
                 with open(path, "wb") as f:
                     f.write(uploaded_file.getvalue())
@@ -703,6 +705,7 @@ if __name__ == "__main__":
                 file_list2 = list_selected_files(base_dir, "pdf")
                 sel21 = st.selectbox("📌 Select the Parsing File", file_list2, index=None, placeholder="Select your file to parse", help="Table to Markdown and Up/Down Cropping")
                 st.session_state.path = os.path.join(base_dir, sel21)
+                st.session_state.path = str(st.session_state.path).replace("\\", "/")
                 st.session_state.path
 
                 col31, col32, col33 = st.columns(3)
@@ -765,39 +768,69 @@ if __name__ == "__main__":
         except:
             st.empty()
 
-    with tab4:   # Prompt Engineering
-        # try:
-        st.session_state.result_df
-        row_num = st.number_input("row number", value=0)
-
-        t_df9 = st.session_state.result_df.iloc[row_num:row_num+1,:]
-        t_df9
-
-        t_df9["Query"].tolist()
-        t_df9["Answer"].tolist()
-        t_df9["Context"].tolist()
-
-        ground_truth = st.text_area("Ground Truth")
-
-        data = {
-            "question": t_df9["Query"].tolist(),
-            "answer": t_df9["Answer"].tolist(),
-            "contexts": t_df9["Context"].tolist(),
-            "ground_truth": ground_truth
-        }
-
-        t_df8 = pd.DataFrame(data)
-        t_df8
-
-        import ast
-        for col in ["contexts"]:
-            t_df8[col] = t_df8[col].apply(ast.literal_eval)
 
 
+    with tab4:   
+
+        # from langchain_community.document_loaders import DataFrameLoader
+        # from ragas.testset.generator import TestsetGenerator
+        from datasets import Dataset
+
+        def pandas_to_ragas(df):
+
+            # Ensure all text columns are strings and handle NaN values
+            text_columns = ['question', 'ground_truth', 'answer']
+            for col in text_columns:
+                df[col] = df[col].fillna('').astype(str)
+                
+            # Convert 'contexts' to a list of lists
+            df['contexts'] = df['contexts'].fillna('').astype(str).apply(lambda x: [x] if x else [])
+            
+            # Converting the DataFrame to a dictionary
+            data_dict = df[['question', 'contexts', 'answer', 'ground_truth']].to_dict('list')
+            
+            # Loading the dictionary as a Hugging Face dataset
+            ragas_testset = Dataset.from_dict(data_dict)
+            
+            return ragas_testset
+
+        results_path = "./results"
+        file_list3 = list_selected_files(results_path, "csv")
+        sel33 = st.selectbox("📌 Select your File", file_list3, index=0, placeholder="Select your file to Evaluate",)
+        full_path = os.path.join(results_path, sel33)
+        full_path = str(full_path).replace("\\", "/")
+        t_df8 = pd.read_csv(full_path)
+
+        row_idx = st.number_input("row index", value=0)
+        t_df8 = t_df8.iloc[row_idx:row_idx+1,:]
+
+
+        t_df8 = t_df8[["Query", "Answer", "Context"]]
+        t_df8.columns = ["question", "answer", "contexts"]
+        t_df8["ground_truth"] = ""
+        # t_df8["contexts"][0]
+
+        t_df8["contexts"] = t_df8["contexts"].astype(str).apply(lambda x: [x] if x else [])
+        # t_df8["contexts"][0]
+
+        st.dataframe(t_df8, use_container_width=True)
+        ragas_testset = pandas_to_ragas(df = t_df8)
+        # ragas_testset
+
+        
         from datasets import Dataset
         from langchain_community.embeddings import OllamaEmbeddings
         from langchain_community.chat_models import ChatOllama
-        
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        from langchain_groq import ChatGroq
+
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        import nest_asyncio
+        nest_asyncio.apply()
+
         from ragas import evaluate
         from ragas.metrics import (
             answer_relevancy,
@@ -806,38 +839,89 @@ if __name__ == "__main__":
             context_precision,
         )
 
-        tds = Dataset.from_pandas(t_df8)
-        tds
 
-        llm = ChatOllama(model="phi3:latest")
+        llm = ChatOllama(model="phi3:latest ")
+        chat_model = ChatOpenAI(model = 'gpt-3.5-turbo')
+        embedding_model = OpenAIEmbeddings()
         embedding_model = OllamaEmbeddings(model="nomic-embed-text")
+
+        if "critic_llm" not in st.session_state:
+            st.session_state.critic_llm = ""
+            st.session_state.embeddings = ""
+            st.session_state.metrics = []
+            st.session_state.naive_result = ""
+
+
+        sel_llm33 = st.radio("Select Eval LLM", ["ChatGPT3.5(Turbo)", "ChatGPT4o", "gemma2(groq)", "phi3(ollama)"])
+        sel_ragas = st.radio("RAGAs Selection", ["answer_relevancy", "faithfulness", "context_precision", "context_recall"])
+
+        if sel_llm33 == "ChatGPT3.5(Turbo)":
+            st.session_state.critic_llm = ChatOpenAI(model = 'gpt-3.5-turbo')
+            st.session_state.embeddings = OpenAIEmbeddings()
+        elif sel_llm33 == "ChatGPT3.5(Turbo)":
+            st.session_state.critic_llm = ChatOpenAI(model = 'gpt-4o')
+            st.session_state.embeddings = OpenAIEmbeddings()
+        elif sel_llm33 == "gemma2(groq)":
+            st.session_state.critic_llm = ChatGroq(name="gemma2-9b-it")   
+            st.session_state.embeddings = OpenAIEmbeddings()
+        elif sel_llm33 == "phi3(ollama)":
+            st.session_state.critic_llm = ChatOllama(model="phi3:latest ") 
+            st.session_state.embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        else:
+            pass
+
         with st.spinner("Processing..."):
             if st.button("Evaluate"):
-                naive_results = evaluate(
-                    tds, 
-                    metrics = [
-                        context_precision,
-                        context_recall,
-                        faithfulness,
-                        answer_relevancy,
-                    ],
-                    llm = llm,
-                    embeddings=embedding_model,
-                    raise_exceptions=True)
+                if sel_ragas == "answer_relevancy":
+                    naive_results = evaluate(
+                        ragas_testset, 
+                        metrics = [
+                            answer_relevancy,
+                        ],
+                        llm = llm,
+                        embeddings=embedding_model,
+                        raise_exceptions=False)
 
+
+                elif sel_ragas == "faithfulness":
+                    naive_results = evaluate(
+                        ragas_testset, 
+                        metrics = [
+                            faithfulness,
+                        ],
+                        llm = llm,
+                        embeddings=embedding_model,
+                        raise_exceptions=False)
+                elif sel_ragas == "context_precision":
+                    naive_results = evaluate(
+                        ragas_testset, 
+                        metrics = [
+                            context_precision,
+                        ],
+                        llm = llm,
+                        embeddings=embedding_model,
+                        raise_exceptions=False)
+                else: 
+                    naive_results = evaluate(
+                        ragas_testset, 
+                        metrics = [
+                            context_recall,
+                        ],
+                        llm = llm,
+                        embeddings=embedding_model,
+                        raise_exceptions=False)
+                    
                 naive_results
-
-
-
-
-
-
-
-
+                
+        st.markdown("---")
+        st.image("ragas_image.png")
 
 
         # except:
         #     st.warning("Under Construction")
+
+
+    
 
 
         
