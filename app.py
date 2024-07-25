@@ -111,6 +111,9 @@ if "llms" not in st.session_state:
 if "context_list" not in st.session_state:
     st.session_state.context_list = []
 
+if "memory_key" not in st.session_state:
+    st.session_state.memory_key = 0
+
 custom_parser = CustomPdfParser()
 cv = ChromaViewer
 
@@ -141,12 +144,25 @@ def create_vectordb(parsed_text, chunk_size=1000, chunk_overlap=200):  # VectorD
 #### [Start] RAG 함수 ###################################################
 def call_rag(custome_template, llm_name, query, temp, top_k, top_p, doc, compress, re_rank, multi_q):
     url = "http://127.0.0.1:8000/call_rag_jarvis"
-    json = json={"template": custome_template, "llm_name": llm_name, "input_voice": query, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}
+    json={"template": custome_template, "llm_name": llm_name, "input_voice": query, "temperature": temp, "top_k":top_k, "top_p":top_p, "doc": doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}
     response = requests.post(url, json=json)
     res = response.json()
     retrival_output = res["output"][0]
     output = res["output"][1]
     return retrival_output, output
+
+store = {}
+def call_rag_with_memory(custome_template, llm_name, query, temp, top_k, top_p, memory_key, doc, compress, re_rank, multi_q):
+    global store
+    url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
+    json=json={"template": custome_template, "llm_name": llm_name, "input_voice": query, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": memory_key, "doc":doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}
+    response = requests.post(url, json=json)
+    res = response.json()
+    if re_rank: retrival_output = res["output"][0]["retrieved_docs"]
+    else:  retrival_output = res["output"][0]["context"]
+    output = res["output"][0]["answer"]
+    memory = res["output"][0]["chat_history"]
+    return retrival_output, output, memory
 
 
 ##### [End] RAG 함수 ############################################################################
@@ -160,6 +176,7 @@ rag_sys_templates = cp.rag_sys_template()
 
 if __name__ == "__main__":
 
+    ###[Start] Sidebar ##################################3
     with st.sidebar:
         st.title("⚓ AI Captain")
         service_type = st.radio("🐬 Services", options=["VectorStore", "Rag", "Open Chat"])
@@ -183,10 +200,10 @@ if __name__ == "__main__":
             st.markdown("")
             st.markdown("🐳 RAG Options")
             sel_doc_check = st.checkbox("Select Docs", help="If not checked, search every documents. if checked, search only selected documents")
-            re_rank_check = st.checkbox("Re Rank", help="Apply Re-Rank", value=True)
+            re_rank_check = st.checkbox("Re Rank", help="Apply Re-Rank", value=False)
             compress_check = st.checkbox("Compress", help="Apply Contextual Compressor")
             multi_check = st.checkbox("Multi Q", help="Apply Multi-Query")
-            history_check = st.checkbox("History", help="If checked, LLM will remember the previous query", disabled=True)
+            memory_check = st.checkbox("Memory", help="If checked, LLM will remember the previous query", disabled=False)
 
             st.markdown("")
             with st.expander("🧪 Hyper-Params"):
@@ -243,9 +260,10 @@ if __name__ == "__main__":
                     create_vectordb(st.session_state.pages, chunk_size, chunk_overlap)    
             except:
                 pass
+    ###[End] Sidebar ##################################3
 
 
-    
+    ###[Start] Main Body ##################################3
     with st.expander("🧭 **Notice**"):
         st.markdown("""
                     - This app is :green[**LLM-driven AI Agent for trouble-shooting in Commercial Vessels**].
@@ -286,25 +304,29 @@ if __name__ == "__main__":
         if st.session_state.time_delta: 
             st.warning(f"⏱️ TimeDelta(Sec) : {st.session_state.time_delta}")
     
-
-
-
     elif service_type == "Rag":
         st.markdown("### 🍀 Rag Service")
+
         if sel_doc_check:
             with st.expander("📚 Specify the Target Documents", expanded=True):
                 sel_doc = st.multiselect("📌 Target Search Documents", st.session_state.doc_list)
         else: sel_doc = None
+
+        if memory_check == True:
+            col41, col42 = st.columns(2)
+            with col41: memory_init = st.button("🗑️ Init Memory", help="Remove Conversation History(Init)")
+            with col42: st.session_state.memory_key = st.number_input("🔑 Memory_key", min_value=1, step=1, key="wqeqq", help="History to be remembered under the same key(id)")
+        else: pass
 
         if llm1 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm1 == "Llama3.1(8B)": llm_name = "llama3.1:latest"
         elif llm1 == "Gemma2(9B)": llm_name = "gemma2:latest"
         elif llm1 == "Ko-Llama3-q4(8B)": llm_name = "ko_llama3_bllossom:latest"
         else: pass
+
         st.session_state.llms.append(llm1)
 
-
-        if text_input1:
+        if text_input1 and memory_check==False:
             start_time = datetime.now()
             st.session_state.rag_messages.append({"role": "user", "content": text_input1})
             retrival_output, rag_output = call_rag(custome_template, llm_name, text_input1, temp, top_k, top_p, sel_doc, compress_check, re_rank_check, multi_check)
@@ -312,13 +334,26 @@ if __name__ == "__main__":
             st.session_state.queries.append(text_input1)
             st.session_state.results.append(rag_output)
             st.session_state.rag_doc = retrival_output
-            
             end_time = datetime.now()
             st.session_state.rag_time_delta = calculate_time_delta(start_time, end_time)
             
+        elif text_input1 and memory_check:
+            start_time = datetime.now()
+            st.session_state.rag_messages.append({"role": "user", "content": text_input1})
+            try:
+                retrival_output, rag_output, memory = call_rag_with_memory(custome_template, llm_name, text_input1, temp, top_k, top_p, st.session_state.memory_key, sel_doc, compress_check, re_rank_check, multi_check)
+                st.session_state.rag_messages.append({"role": "assistant", "content": rag_output})
+                st.session_state.queries.append(text_input1)
+                st.session_state.results.append(rag_output)
+                st.session_state.rag_doc = retrival_output
+                
+                end_time = datetime.now()
+                st.session_state.rag_time_delta = calculate_time_delta(start_time, end_time)
+            except: pass
+            
         else:
-            pass
-        
+            pass 
+
         for msg in st.session_state.rag_messages:
             if msg["role"] == "user":
                 st.chat_message(msg["role"], avatar="👨‍✈️").write(msg["content"])
@@ -363,11 +398,8 @@ if __name__ == "__main__":
                             st.image(target_imgs[page_num], caption=target_imgs[page_num], width=600)
                         ### [End] Img Show ---------------------------------------
 
-
-
     elif service_type == "VectorStore":
         st.markdown("### 🍇 VectorStore Manager")
-
         try:
             df = cv.view_collections("vector_index")
             df["title"] = df["metadatas"].apply(lambda x: x["keywords"])
@@ -396,19 +428,13 @@ if __name__ == "__main__":
         st.markdown("---")
         st.subheader("Delete Embeded Documents")
         delete_doc = st.selectbox("Target Document", st.session_state.doc_list, index=None)
-        # delete_doc
         try:
             del_ids = vectordb.get(where={'keywords':delete_doc})["ids"]
-            # del_ids
             if st.button("Delete All Ids"):
                 vectordb.delete(del_ids)
                 st.info("All Selected Ids were Deleted")
         except:
             st.empty()
-
-
-
-
     else:
         st.markdown("공사중")
 

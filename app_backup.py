@@ -463,8 +463,11 @@ async def call_rag_with_history(custome_template, llm_name, query, temp, top_k, 
     try:
         url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
         res = await api_ollama_history(url, custome_template, llm_name, query, temp, top_k, top_p, history_key, doc, compress, re_rank, multi_q)
+        
+        
         if re_rank: retrival_output = res["output"][0]["retrieved_docs"]
         else:  retrival_output = res["output"][0]["context"]
+        
         output = res["output"][0]["answer"]
         history = res["output"][0]["chat_history"]
         try:
