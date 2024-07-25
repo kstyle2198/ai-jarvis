@@ -10,4 +10,4 @@ just..
 
 special thanks to [Kolja Beigel](https://github.com/KoljaB) regarding STT and TTS
 
-![alt text](image.png)
+![image](https://github.com/user-attachments/assets/63fb4ddf-0ae7-4881-9b44-353abe762c5d)
