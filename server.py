@@ -125,8 +125,9 @@ async def jarvis_chat(template, llm_name, input_voice):
     prompt = ChatPromptTemplate.from_template(prompt)
     query = {"query": input_voice}
     chain = prompt | llm | StrOutputParser()
-    sentence = await asyncio.to_thread(chain.invoke, query)
-    return sentence
+    response = await asyncio.to_thread(chain.invoke, query)
+    print(response)
+    return response
 ########[End] Chatbot Functions ####################################################################################
 
 ########## [Start] Rag Functions ########################################################################################

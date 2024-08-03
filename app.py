@@ -155,7 +155,7 @@ store = {}
 def call_rag_with_memory(custome_template, llm_name, query, temp, top_k, top_p, memory_key, doc, compress, re_rank, multi_q):
     global store
     url = "http://127.0.0.1:8000/call_rag_jarvis_with_history"
-    json=json={"template": custome_template, "llm_name": llm_name, "input_voice": query, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": memory_key, "doc":doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}
+    json={"template": custome_template, "llm_name": llm_name, "input_voice": query, "temperature": temp, "top_k":top_k, "top_p":top_p, "history_key": memory_key, "doc":doc, "compress": compress, "re_rank": re_rank, "multi_q":multi_q}
     response = requests.post(url, json=json)
     res = response.json()
     if re_rank: retrival_output = res["output"][0]["retrieved_docs"]
@@ -183,10 +183,8 @@ if __name__ == "__main__":
         st.markdown("---")
 
         if service_type == "Open Chat":
-            st.markdown("### LLM")
-            llm1 = st.radio("🐬 **Select LLM**", options=["Gemma(2B)", "Phi3(3.8B)", "Llama3.1(8B)", "Gemma2(9B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
+            llm1 = st.radio("🐬 **Select LLM**", options=["Gemma2(2B)", "Phi3(3.8B)", "Llama3.1(8B)", "Gemma2(9B)"], index=0, key="dsfv", help="Bigger LLM returns better answers but takes more time")
             st.markdown("")
-            st.markdown("### Prompts")
             sel_template = st.radio("🖋️ Prompt", ["AI_CoPilot", "Medical Assistant"], help="Define the roll of LLM")
             with st.expander("✔️ Prompt Details", expanded=False):
               custome_template = st.text_area("📒 Template", custom_templates[sel_template], height=200)
@@ -269,7 +267,7 @@ if __name__ == "__main__":
                     - This app is :green[**LLM-driven AI Agent for trouble-shooting in Commercial Vessels**].
                     - :orange[**VectorStore**] is the Storage of your knowledge (embedding your own PDFs)
                     - :orange[**RAG**] is for ***Domain-Specific Conversations*** within VectorStore
-                    - :orange[**Chatbot**] is for Common Conversations regarding any interests like techs, medical help, etc.
+                    - :orange[**Open Chat**] is for Common Conversations regarding any interests like techs, medical help, etc.
                     
                     """)
         
@@ -278,7 +276,7 @@ if __name__ == "__main__":
     
     if service_type == "Open Chat":
         st.markdown("### 🍓 Open Chat Service")
-        if llm1 == "Gemma(2B)": llm_name = "gemma:2b"
+        if llm1 == "Gemma2(2B)": llm_name = "gemma2:2b"
         elif llm1 == "Phi3(3.8B)": llm_name = "phi3:latest"
         elif llm1 == "Llama3.1(8B)": llm_name = "llama3.1:latest"
         elif llm1 == "Gemma2(9B)": llm_name = "gemma2:latest"
@@ -350,7 +348,7 @@ if __name__ == "__main__":
                 end_time = datetime.now()
                 st.session_state.rag_time_delta = calculate_time_delta(start_time, end_time)
             except: pass
-            
+
         else:
             pass 
 
@@ -381,6 +379,7 @@ if __name__ == "__main__":
                                 img_dict[metadata["keywords"]].append(metadata["page_number"])
                             else:
                                 img_dict[metadata["keywords"]].append(metadata["page_number"])
+                                
                     with col222:
                         ### [Start] Img Show ---------------------------------------
                         base_img_path = "./images/"
@@ -395,7 +394,8 @@ if __name__ == "__main__":
                         with col31: image_show_check = st.checkbox("Show Images", value=True)
                         with col32: page_num = st.number_input(f"Page Order (max:{len(target_imgs)-1})", min_value=0, max_value=len(target_imgs)-1)
                         if image_show_check:
-                            st.image(target_imgs[page_num], caption=target_imgs[page_num], width=600)
+                            try: st.image(target_imgs[page_num], caption=target_imgs[page_num], width=600)
+                            except: st.info("No Image for this page")
                         ### [End] Img Show ---------------------------------------
 
     elif service_type == "VectorStore":
